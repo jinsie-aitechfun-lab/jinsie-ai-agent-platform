@@ -1,4 +1,3 @@
-````markdown
 <p align="center">
   <img src="docs/assets/logo.png" alt="Jinsie | AITechFun Lab" width="120" />
 </p>
@@ -232,5 +231,3 @@ MIT License
 
 Copyright (c) 2025
 **Jinsie | AITechFun Lab**
-
-```
