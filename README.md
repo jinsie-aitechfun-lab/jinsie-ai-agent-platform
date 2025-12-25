@@ -2,7 +2,7 @@
   <img src="docs/assets/logo.png" alt="Jinsie | AITechFun Lab" width="120" />
 </p>
 
-<h1 align="center">Jinsie AI Agent Platform</h1>
+<h1 align="center">🎉 Jinsie AI Agent Platform</h1>
 
 <p align="center">
   Cloud-native AI Applications · RAG Systems · Multi-Agent Workflows
@@ -24,22 +24,6 @@
 </p>
 
 ---
-
-
-# 🎉 **Jinsie AI Agent Platform**
-
-### *Cloud-native AI Applications · RAG Systems · Multi-Agent Workflows*
-
-<div align="left">
-
-![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)
-![FastAPI](https://img.shields.io/badge/FastAPI-Production--Ready-009688.svg)
-![LangGraph](https://img.shields.io/badge/LangGraph-Multi--Agent-orange.svg)
-![Milvus](https://img.shields.io/badge/VectorDB-Milvus-5A2DFF.svg)
-![License](https://img.shields.io/badge/License-MIT-green.svg)
-![Status](https://img.shields.io/badge/Status-Active-success.svg)
-
-</div>
 
 **Jinsie AI Agent Platform** 是一个基于 **LangGraph + FastAPI** 构建的 **企业级 AI 应用工程化模板**，旨在帮助开发者快速搭建可部署、可扩展、可维护的 RAG 与 Multi-Agent 系统。
 
