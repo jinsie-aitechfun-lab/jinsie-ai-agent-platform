@@ -1,87 +1,67 @@
-# ================================
-# 通用配置（根据你本机情况可调整）
-# ================================
+# 使用虚拟环境 .venv，并统一通过 .venv/bin/python 调用
+VENV_DIR := .venv
+VENV_PY  := $(VENV_DIR)/bin/python
 
-# 使用当前终端里的 python（建议是 conda py310 环境）
-PYTHON ?= python
-PIP    ?= $(PYTHON) -m pip
+# 默认命令
+.PHONY: help venv install env-check run test clean
 
-# FastAPI / Uvicorn 启动入口
-# 按你的项目实际改成对应的模块路径和 app 对象：
-#   如果是 main_server.py 里有 app：
-#     APP_MODULE = main_server:app
-#   如果是 app/main.py 里有 app：
-#     APP_MODULE = app.main:app
-APP_MODULE ?= app.main:app
+help:
+	@echo "可用命令："
+	@echo "  make venv       创建虚拟环境 (.venv)"
+	@echo "  make install    在虚拟环境中安装依赖 (requirements.txt)"
+	@echo "  make env-check  运行环境自检脚本 env_check.py"
+	@echo "  make run        运行主程序 main.py"
+	@echo "  make test       运行测试（如 pytest）"
+	@echo "  make clean      删除虚拟环境和临时文件"
 
-# Uvicorn 启动端口
-PORT ?= 8000
+# 创建虚拟环境
+venv:
+	@echo ">>> 创建虚拟环境：$(VENV_DIR)"
+	python -m venv $(VENV_DIR)
+	@echo ">>> 虚拟环境已创建。"
 
+# 安装依赖
+install: venv
+	@echo ">>> 在虚拟环境中安装依赖..."
+	$(VENV_PY) -m pip install --upgrade pip
+	@if [ -f requirements.txt ]; then \
+		$(VENV_PY) -m pip install -r requirements.txt; \
+	else \
+		echo "WARNING: 未找到 requirements.txt，跳过依赖安装"; \
+	fi
+	@echo ">>> 依赖安装完成。"
 
-# ================================
-# 环境相关命令
-# ================================
+# 运行环境自检脚本
+env-check: install
+	@echo ">>> 运行环境检查脚本 env_check.py..."
+	@if [ -f env_check.py ]; then \
+		$(VENV_PY) env_check.py; \
+	else \
+		echo "ERROR: 未找到 env_check.py，请先创建该文件。"; \
+		exit 1; \
+	fi
 
-.PHONY: env-check env-setup env-freeze
+# 运行主程序
+run: install
+	@echo ">>> 运行主程序 main.py..."
+	@if [ -f main.py ]; then \
+		$(VENV_PY) main.py; \
+	else \
+		echo "ERROR: 未找到 main.py，请确认入口文件名称。"; \
+		exit 1; \
+	fi
 
-# 运行环境自检脚本（scripts/env_check.py）
-env-check:
-	$(PYTHON) scripts/env_check.py
+# 测试（如果未来加上 pytest，这里可以直接用）
+test: install
+	@echo ">>> 运行测试..."
+	@if command -v pytest >/dev/null 2>&1; then \
+		$(VENV_PY) -m pytest; \
+	else \
+		echo "WARNING: 未安装 pytest 或未在 PATH 中，跳过测试"; \
+	fi
 
-# 使用 requirements.txt 安装依赖（新环境初始化时用）
-env-setup:
-	$(PIP) install -r requirements.txt
-
-# 导出当前环境依赖到 requirements-freeze.txt（快照）
-env-freeze:
-	$(PYTHON) -m pip freeze > requirements-freeze.txt
-	@echo "✅ 已导出当前环境依赖到 requirements-freeze.txt"
-
-
-# ================================
-# 本地开发 / 运行服务
-# ================================
-
-.PHONY: dev run
-
-# 开发模式启动（自动重载代码）
-dev:
-	$(PYTHON) -m uvicorn $(APP_MODULE) --reload --port $(PORT)
-
-# 生产模式启动（不自动重载）
-run:
-	$(PYTHON) -m uvicorn $(APP_MODULE) --port $(PORT)
-
-
-# ================================
-# 代码质量 / 测试（可选，按需使用）
-# ================================
-
-.PHONY: lint format test
-
-# 静态检查（需要先安装 ruff：python -m pip install ruff）
-lint:
-	-$(PYTHON) -m ruff app scripts tests
-
-# 自动格式化（需要先安装 black：python -m pip install black）
-format:
-	-$(PYTHON) -m black app scripts tests
-
-# 单元测试（需要 pytest：python -m pip install pytest）
-test:
-	$(PYTHON) -m pytest -q
-
-
-# ================================
-# Docker 构建与运行（后期部署时用）
-# ================================
-
-.PHONY: docker-build docker-run
-
-# 构建 Docker 镜像（需要项目根目录有 Dockerfile）
-docker-build:
-	docker build -t jinsie-ai-agent-platform .
-
-# 运行 Docker 镜像（映射 8000 端口）
-docker-run:
-	docker run -p 8000:8000 --name jinsie-ai-agent-platform jinsie-ai-agent-platform
+# 清理
+clean:
+	@echo ">>> 清理虚拟环境和缓存文件..."
+	rm -rf $(VENV_DIR) .pytest_cache __pycache__ */__pycache__
+	@echo ">>> 清理完成。"
