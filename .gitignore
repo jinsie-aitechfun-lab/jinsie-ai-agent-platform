@@ -1,3 +1,25 @@
+# Python cache
 __pycache__/
-*.pyc
+*.py[cod]
+
+# Virtual environments
+env/
+venv/
+.venv/
+*.egg-info/
+
+# macOS system files
 .DS_Store
+
+# Internal private docs (not to be synced)
+docs/internal/
+
+# Logs
+logs/
+*.log
+
+# VSCode settings (optional)
+.vscode/
+
+# PyCharm settings (optional)
+.idea/
