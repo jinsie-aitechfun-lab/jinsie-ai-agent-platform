@@ -1,13 +1,15 @@
 import os
-import requests
+from openai import OpenAI
 
-API_KEY = os.getenv("SILICONFLOW_API_KEY")
-url = "https://api.siliconflow.cn/v1/chat/completions"
+client = OpenAI(
+    api_key=os.getenv("SILICONFLOW_API_KEY"),
+    base_url="https://api.siliconflow.cn/v1",
+)
 
-data = {
-    "model": "Qwen/Qwen2.5-7B-Instruct",
-    "messages": [{"role": "user", "content": "你好，帮我总结一下 Day1 要做什么？"}]
-}
+resp = client.embeddings.create(
+    model="BAAI/bge-large-zh-v1.5",
+    input=["这是一个用于生成 embedding 的示例。"],
+)
 
-resp = requests.post(url, json=data, headers={"Authorization": f"Bearer {API_KEY}"})
-print(resp.json()["choices"][0]["message"]["content"])
+embedding = resp.data[0].embedding
+print("Embedding dim:", len(embedding))
