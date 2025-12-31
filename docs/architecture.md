@@ -1,64 +1,209 @@
-# Architecture Overview（通义千问增强版）
+# 🏗️ System Architecture (Public & Professional Edition)
 
-本文件描述项目的整体架构，包括多模型路由、通义千问增强层、RAG 检索链路、多 Agent 执行流、FastAPI 服务层与阿里云部署架构。
+本文件展示 **Jinsie AI Agent Platform** 的整体系统架构，用于公开展示项目工程能力、模块组织方式与技术路线。  
+本版本不包含任何隐私信息，适合 GitHub 与大厂面试使用。
 
-## 1. System Architecture Diagram
+---
 
-```mermaid
-flowchart TD
-    User[用户请求] --> API[FastAPI 接口层]
-    API --> Router[LLM Router<br/>选择模型引擎]
-    Router --> Qwen[通义 Qwen API]
-    Router --> DeepSeek[DeepSeek API]
-    Router --> GPT[OpenAI / Azure]
-    Router --> Doubao[字节豆包]
+# 📐 1. Architecture Overview
 
-    API --> AgentLayer[多 Agent 层]
-    AgentLayer --> Planner[Planner Agent<br/>任务拆解]
-    Planner --> Worker[Worker Agents<br/>工具调用]
+系统采用 **“API 层 → 应用层（LLM / RAG / Agent） → 向量与数据层 → 基础设施层”** 的分层架构。
 
-    Worker --> RAG[RAG 检索模块]
-    RAG --> Embed[Embedding（Qwen-embedding）]
-    RAG --> VectorDB[向量库 Milvus / OpenSearch]
-    VectorDB --> Retriever[检索器 Retriever]
-
-    Worker --> Tools[工具集（搜索 / 计算 / API）]
-
-    Tools --> AgentLayer
-    Retriever --> Worker
-    Worker --> Synthesizer[结果融合 Synthesis]
-
-    Synthesizer --> API
-    API --> User
+```
+┌──────────────────────────────────────────────┐
+│                  API Layer                    │
+│        (FastAPI · RESTful Endpoints)          │
+└──────────────────────────────────────────────┘
+                       │
+                       ▼
+┌──────────────────────────────────────────────┐
+│                Application Layer              │
+│  ├── LLM Module (ChatCompletion / Streaming)  │
+│  ├── RAG Module (Retriever · Ranker · Reader) │
+│  ├── Agent Module (LangGraph State Workflow)  │
+│  └── Tools & Services (Search · FunctionCall) │
+└──────────────────────────────────────────────┘
+                       │
+                       ▼
+┌──────────────────────────────────────────────┐
+│                Vector & Storage               │
+│  ├── Embedding (Qwen-Embedding / OpenAI)      │
+│  ├── Vector Store (Milvus / OpenSearch)       │
+│  └── Document Store (chunked text)            │
+└──────────────────────────────────────────────┘
+                       │
+                       ▼
+┌──────────────────────────────────────────────┐
+│              Infrastructure Layer             │
+│  ├── Docker Containerization                  │
+│  ├── Logging & Monitoring                     │
+│  ├── Cloud Deployment (Aliyun Ready)          │
+└──────────────────────────────────────────────┘
 ```
 
-## 2. Component Breakdown
+---
 
-### 2.1 FastAPI 服务层  
-统一 HTTP 入口、参数校验、Router/Agent/RAG 调用、SSE 流式输出。
+# 📦 2. Module Responsibilities
 
-### 2.2 多模型路由  
-根据任务类型自动选择 Qwen / DeepSeek / GPT / Doubao。
+## **2.1 API Layer**
+基于 **FastAPI**，用于：
 
-## 3. RRAG Pipeline（通义增强）
+- 暴露标准化企业 API  
+- 统一入口（Agent Chat / RAG Query）  
+- 生成 Swagger 自动文档  
 
-Qwen-Embedding → Milvus/OpenSearch → Top-k 检索 → Agent 综合总结。
+目录：`app/api/`
 
-## 4. Agent Architecture  
-Planner → Worker → ToolCall → RAG → Synthesizer。
+---
 
-## 5. SSE Streaming  
-支持 token-level 流式输出，前端实时渲染。
+## **2.2 LLM Core Layer**
 
-## 6. Directory Structure  
-（略，与你项目结构一致）
+用于：
 
-## 7. Deployment（阿里云）
-Docker → ACR → ECS/Serverless → ALB → SLS。
+- 调用 ChatCompletion  
+- 实现流式输出（SSE / Token Streaming）  
+- 包装统一的模型调用接口  
+- 支持多模型路由（Qwen / DeepSeek / OpenAI）
 
-## 8. 通义千问增强层总结
-- Qwen API 主力  
+目录：`app/core/llm/`
+
+---
+
+## **2.3 RAG Layer**
+
+包含检索增强生成的完整链路：
+
+1. 文档解析（PDF / Text）
+2. 文本分块（Chunking）
+3. 嵌入生成（Embedding）
+4. 向量库（Milvus / OpenSearch）
+5. Top-K 检索  
+6. RAG Pipeline 组装
+
+目录：  
+`app/rag/`  
+`app/core/vectorstore/`
+
+---
+
+## **2.4 Agent Layer（多智能体）**
+
+基于 LangGraph，实现：
+
+- 有状态工作流（StateGraph）
+- Planner / Worker 角色划分
+- 工具系统调用（搜索 / RAG 查询）
+- 连续多步推理（ReAct 或工具链路）
+
+目录：  
+`app/agents/`
+
+---
+
+## **2.5 Services & Tools**
+
+提供基础能力：
+
+- 搜索工具  
+- 数学计算工具  
+- 调用外部 API  
+- 可扩展的 Tool Call 体系  
+
+目录：  
+`app/services/`
+
+---
+
+# 🧭 3. Key Data Flow
+
+## **3.1 Agent Query Flow**
+```
+Client → API → Agent Workflow → (Tools: RAG / Calculator / Search)
+      → LLM → Response → Client
+```
+
+## **3.2 RAG Query Flow**
+```
+Client → API → RAG Router
+      → Retriever → Ranker → Reader(LLM)
+      → Response → Client
+```
+
+## **3.3 Embedding & Indexing Flow**
+```
+Uploaded Document → Parser → Chunker
+                 → Embedding Model → Vector DB
+```
+
+---
+
+# 🧩 4. Technology Choices & Reasons
+
+| 组件 | 选型 | 理由 |
+|------|------|------|
+| API | FastAPI | 高性能、类型安全、文档自动生成 |
+| Agent 框架 | LangGraph | 状态流转可视化、适合企业级多 Agent |
+| LLM | Qwen / DeepSeek / OpenAI | 覆盖国产云 / 海外能力 |
+| Embedding | Qwen-Embedding | 阿里云兼容性强、国内可用 |
+| 向量库 | Milvus / OpenSearch | 高性能、企业通用 |
+| 部署 | Docker | 云原生部署标准 |
+
+---
+
+# 🌐 5. Qwen Enhanced Layer（通义增强版设计）
+
+为了适配阿里云生态，系统支持扩展：
+
+- Qwen 多模型体系（Max / Long / VL）
+- Qwen-Agent 能力  
 - Qwen-Embedding  
-- ToolCall-native  
-- RAG 与 OpenSearch 兼容  
-- SSE 兼容通义  
+- Aliyun OpenSearch  
+- 阿里云 Serverless 部署  
+
+增强组件目录（预留）：  
+`app/extensions/qwen/`
+
+---
+
+# 🧱 6. Directory Structure (Simplified)
+
+```
+app/
+  ├── api/             # 统一接口层
+  ├── core/
+  │    ├── llm/        # 模型调用
+  │    └── vectorstore/# 向量库适配
+  ├── rag/             # 检索增强生成
+  ├── agents/          # 多智能体逻辑
+  ├── services/        # 工具系统
+docs/
+  ├── assets/          # 架构图 / 演示
+  └── roadmap.md       # 项目 Roadmap（公开）
+infra/
+  ├── Dockerfile
+  └── deploy/          # 部署脚本
+```
+
+---
+
+# 🚀 7. Future Extensions
+
+- 多模态（图片/音频）输入  
+- Agent 工具市场  
+- Online Fine-tuning  
+- 监控与可观察性（Grafana / Prometheus）  
+- 企业级权限系统  
+
+---
+
+# ✅ 8. Summary
+
+本架构文档提供：
+
+- 模块化设计  
+- 标准化链路  
+- 企业级可复用结构  
+- 可持续扩展的工程体系  
+- 通义千问增强能力预留  
+
+适合公开展示，适配阿里云、字节、腾讯等云厂商的工程化审阅标准。
