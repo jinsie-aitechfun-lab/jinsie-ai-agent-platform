@@ -36,3 +36,18 @@
 2. 创建分支：  
    ```bash
    git checkout -b fix/your-update
+
+##  🟦 开发约定
+开发本仓库时，请遵守统一的 Git 提交信息规范，以便后续代码审阅与变更追踪。
+提交信息格式遵循 Conventional Commits
+
+标题格式：type: short description，例如：
+
+```bash
+feat: add task scheduler agent for multi-step workflows
+docs: update architecture overview for agent graphs
+chore: add __init__.py to make app a Python package
+```
+详细规范见：
+
+docs/git-commit-style.md
