@@ -122,7 +122,7 @@ app/
   └── models/          # Pydantic 数据模型
 docs/
   ├── assets/          # Logo / 架构图 / Demo
-  └── notes.md         # 项目价值说明（人才引进方向草稿）
+  └── notes.md         # 项目价值说明（企业内部评估草稿）
 tests/
   └── ...              # 单测（可选）
 ```
@@ -203,8 +203,8 @@ docker run -p 8000:8000 jinsie-ai-agent
 
 | 文档                | 说明                    |
 | ----------------- | --------------------- |
-| `README.md`       | 项目介绍（面试官 & 使用者）       |
-| `docs/notes.md`   | 项目应用价值说明（企业/人才引进材料草稿） |
+| `README.md`       | 使用者 & 维护者）       |
+| `docs/notes.md`   | 项目应用价值说明（企业应用场景草稿） |
 | `CONTRIBUTING.md` | 贡献指南（保护核心逻辑，由维护者主导）   |
 
 ---

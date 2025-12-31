@@ -1,25 +1,54 @@
-# Python cache
+# Python / FastAPI / AI 项目通用 .gitignore
+
+# 虚拟环境
+.venv/
+venv/
+env/
+
+# Python 缓存
 __pycache__/
 *.py[cod]
-
-# Virtual environments
-env/
-venv/
-.venv/
+*.pyo
+*.pyd
+*.pytest_cache/
+.pytest_cache/
 *.egg-info/
 
-# macOS system files
-.DS_Store
+# IDE / 编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
 
+# 日志 & 临时文件
+logs/
+*.log
+tmp/
+temp/
+
+# 环境配置
+.env
+.env.*
+
+# 构建输出
+dist/
+build/
+site/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# 数据 / 模型（如有）
+data/
+datasets/
+checkpoints/
+models/
+
+# 私密文档（重要）
+docs/interview/
 # Internal private docs (not to be synced)
 docs/internal/
 
-# Logs
-logs/
-*.log
-
-# VSCode settings (optional)
-.vscode/
-
-# PyCharm settings (optional)
-.idea/
+# OS 文件
+.DS_Store
+Thumbs.db
