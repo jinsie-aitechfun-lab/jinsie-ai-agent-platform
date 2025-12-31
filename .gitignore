@@ -45,10 +45,7 @@ checkpoints/
 models/
 
 # 私密文档（重要）
-docs/interview/
-# Internal private docs (not to be synced)
-docs/internal/
-
+docs-private/
 # OS 文件
 .DS_Store
 Thumbs.db
