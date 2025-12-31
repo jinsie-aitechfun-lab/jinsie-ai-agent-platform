@@ -32,14 +32,9 @@ install: venv
 	@echo ">>> 依赖安装完成。"
 
 # 运行环境自检脚本
-env-check: install
+env-check:
 	@echo ">>> 运行环境检查脚本 env_check.py..."
-	@if [ -f env_check.py ]; then \
-		$(VENV_PY) env_check.py; \
-	else \
-		echo "ERROR: 未找到 env_check.py，请先创建该文件。"; \
-		exit 1; \
-	fi
+	python scripts/env_check.py
 
 # 运行主程序
 run: install
