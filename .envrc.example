@@ -1,0 +1,10 @@
+# Copy to .envrc and run: direnv allow
+# Choose ONE of the following:
+
+# conda activate py310
+
+# Or if you use a virtualenv:
+# source .venv/bin/activate
+
+# You can also export variables here if needed:
+# export APP_ENV=dev
