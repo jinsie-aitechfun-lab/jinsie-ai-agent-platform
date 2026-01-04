@@ -1,10 +1,31 @@
-# Copy to .envrc and run: direnv allow
-# Choose ONE of the following:
+# --- make conda available for non-interactive shells (direnv) ---
+# Ensure conda is initialized before activation
+# Run once if needed: conda init zsh
+source "$(conda info --base)/etc/profile.d/conda.sh"
 
-# conda activate py310
+# Python environment
+conda activate py310
 
-# Or if you use a virtualenv:
-# source .venv/bin/activate
+# ================================
+# OpenAI-compatible Provider Config
+# ================================
 
-# You can also export variables here if needed:
-# export APP_ENV=dev
+# Base URL for OpenAI-compatible API
+# Example providers:
+# - SiliconFlow: https://api.siliconflow.cn/v1
+# - Bailian (Alibaba Cloud): https://dashscope.aliyuncs.com/compatible-mode/v1
+export OPENAI_BASE_URL="https://api.siliconflow.cn/v1"
+
+# API Key (DO NOT commit real keys)
+# Copy this file to .envrc and replace with your own key
+export OPENAI_API_KEY="your_api_key_here"
+
+# ================================
+# Model Configuration
+# ================================
+
+# Chat / Completion model
+export OPENAI_MODEL="Qwen/Qwen2.5-7B-Instruct"
+
+# Embedding model
+export OPENAI_EMBEDDING_MODEL="Qwen/Qwen3-Embedding-4B"

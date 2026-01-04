@@ -50,3 +50,7 @@ docs-private/
 .DS_Store
 Thumbs.db
 .envrc
+
+# macOS
+.DS_Store
+
