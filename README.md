@@ -18,7 +18,7 @@
 
 ---
 
-# 📘 项目简介
+# 📘 项目简介    
 
 **Jinsie AI Agent Platform** 是面向企业的 **云原生多智能体（Multi-Agent）AI 应用平台**。  
 平台基于 **FastAPI + LangGraph + Milvus** 构建，支持：
