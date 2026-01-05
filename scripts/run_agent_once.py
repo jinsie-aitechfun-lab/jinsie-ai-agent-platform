@@ -18,32 +18,58 @@ def save_text(path: str, content: str) -> None:
 
 
 def validate_payload(payload: dict) -> None:
-    required_top = {"task_summary", "steps", "assumptions", "risks"}
-    missing = required_top - set(payload.keys())
-    extra = set(payload.keys()) - required_top
-    if missing:
-        raise ValueError(f"Missing fields: {sorted(missing)}")
-    if extra:
-        raise ValueError(f"Unexpected fields: {sorted(extra)}")
+    # ---- top-level checks ----
+    required_top = ["task_summary", "steps", "assumptions", "risks"]
+    for k in required_top:
+        if k not in payload:
+            raise ValueError(f"missing top-level field: {k}")
 
-    steps = payload["steps"]
-    if not isinstance(steps, list) or len(steps) != 7:
-        raise ValueError("steps must be a list of length 7")
+    if not isinstance(payload["task_summary"], str) or not payload["task_summary"].strip():
+        raise ValueError("task_summary must be a non-empty string")
 
-    for i, s in enumerate(steps, start=1):
-        if not isinstance(s, dict):
+    if not isinstance(payload["steps"], list) or len(payload["steps"]) == 0:
+        raise ValueError("steps must be a non-empty array")
+
+    if not isinstance(payload["assumptions"], list) or not all(isinstance(x, str) for x in payload["assumptions"]):
+        raise ValueError("assumptions must be an array of strings")
+
+    if not isinstance(payload["risks"], list) or not all(isinstance(x, str) for x in payload["risks"]):
+        raise ValueError("risks must be an array of strings")
+
+    # ---- steps schema checks (Day3 V1) ----
+    required_step_fields = [
+        "step_id",
+        "title",
+        "description",
+        "dependencies",
+        "deliverable",
+        "acceptance",
+    ]
+
+    seen_ids = set()
+    for i, step in enumerate(payload["steps"]):
+        if not isinstance(step, dict):
             raise ValueError(f"steps[{i}] must be an object")
-        for k in ["day", "goal", "tasks", "deliverable"]:
-            if k not in s:
+
+        for k in required_step_fields:
+            if k not in step:
                 raise ValueError(f"steps[{i}] missing field: {k}")
-        if s["day"] != i:
-            raise ValueError(f"steps[{i}].day must be {i}")
-        if not isinstance(s["tasks"], list) or len(s["tasks"]) < 3:
-            raise ValueError(f"steps[{i}].tasks must be a list with >= 3 items")
-        if not isinstance(s["deliverable"], str) or len(s["deliverable"].strip()) == 0:
-            raise ValueError(f"steps[{i}].deliverable must be a non-empty string")
 
+        if not isinstance(step["step_id"], str) or not step["step_id"].strip():
+            raise ValueError(f"steps[{i}].step_id must be a non-empty string")
 
+        if step["step_id"] in seen_ids:
+            raise ValueError(f"duplicate step_id: {step['step_id']}")
+        seen_ids.add(step["step_id"])
+
+        for k in ["title", "description", "deliverable", "acceptance"]:
+            if not isinstance(step[k], str) or not step[k].strip():
+                raise ValueError(f"steps[{i}].{k} must be a non-empty string")
+
+        if not isinstance(step["dependencies"], list) or not all(isinstance(x, str) for x in step["dependencies"]):
+            raise ValueError(f"steps[{i}].dependencies must be an array of strings")
+        
+        
 def main():
     parser = argparse.ArgumentParser(description="Run a single agent call with strict JSON output.")
     parser.add_argument("query", nargs="?", help="User query text")
