@@ -4,6 +4,9 @@ Copyright (c) 2025 Jinsie | AITechFun Lab
 SPDX-License-Identifier: MIT
 """
 
+from dotenv import load_dotenv
+load_dotenv(override=False)
+
 from fastapi import FastAPI
 
 app = FastAPI()

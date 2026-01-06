@@ -49,7 +49,6 @@ docs-private/
 # OS 文件
 .DS_Store
 Thumbs.db
-.envrc
 
 # macOS
 .DS_Store
