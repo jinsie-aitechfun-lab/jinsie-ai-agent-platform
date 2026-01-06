@@ -22,3 +22,10 @@ Prompts are loaded via:
 Example:
 
 - `load_prompt("system_prompt")` loads `app/prompts/system_prompt.md`.
+
+app/
+- application entry layer
+- responsible for request orchestration
+- no demo / experiment code allowed
+
+Note: Prompt templates are treated as immutable resources at runtime.
