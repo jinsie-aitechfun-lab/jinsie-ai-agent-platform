@@ -1,3 +1,4 @@
+from app.services.chat_completion_service import ChatCompletionService
 from pathlib import Path
 import argparse
 import json
@@ -8,6 +9,9 @@ from openai import OpenAI
 
 
 def load_text(path: str) -> str:
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(f"Input file not found: {p.resolve()}")
     return Path(path).read_text(encoding="utf-8")
 
 
@@ -87,21 +91,15 @@ def main():
 
     system_prompt = load_text("app/prompts/system//agent_system.md")
 
-    client = OpenAI(
-        api_key=os.getenv("OPENAI_API_KEY"),
-        base_url=os.getenv("OPENAI_BASE_URL"),
-    )
-
-    response = client.chat.completions.create(
-        model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+    service = ChatCompletionService()
+    raw = service.create(
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_input},
         ],
         temperature=0.2,
     )
-
-    raw = response.choices[0].message.content
+    
     payload = json.loads(raw)
     validate_payload(payload)
 
