@@ -18,216 +18,251 @@
 
 ---
 
-# 📘 项目简介
+## 📘 项目简介
 
-**Jinsie AI Agent Platform** 是面向企业的 **云原生多智能体（Multi-Agent）AI 应用平台**。  
-平台基于 **FastAPI + LangGraph + Milvus** 构建，支持：
+**Jinsie AI Agent Platform** 是一个面向企业级场景的 **云原生 AI Agent 应用平台工程模板**，  
+目标是帮助 **AI 应用工程师 / 团队** 快速构建：
 
-- 🔍 **RAG（检索增强生成）企业知识库**
-- 🤖 **多 Agent 协作流程（有状态执行）**
-- 🔧 **可扩展的工具系统**
-- 🌐 **云原生部署（阿里云友好）**
-- 🐳 **Docker 容器化一键上线**
+- 可控、可观测的 Agent 执行流程  
+- 企业级 RAG（检索增强生成）系统  
+- 多 Agent / Workflow 协作应用  
+- 可部署、可维护、可扩展的 AI 服务  
 
-适用于：
+平台采用 **FastAPI + LangGraph + Milvus** 作为核心技术栈，强调：
 
-- 企业智能客服  
-- 内部知识库检索  
-- 多智能体自动化流程  
-- 政企 AI 中台  
-- AI 应用工程师项目模板  
+- 工程化结构  
+- 清晰的职责边界  
+- 可演进的 Agent 能力  
 
 ---
 
-# ⚡ 快速启动（5 分钟跑起来）
+## 🎯 适用场景
 
-### 1. 克隆项目
+- 企业智能客服 / 内部助手  
+- 知识库问答与文档检索  
+- 多 Agent 自动化流程（分析 / 规划 / 执行）  
+- AI 中台 / AI 应用底座  
+- AI 应用工程师作品集 / 工程模板  
+
+---
+
+## 🔐 环境变量配置
+
+本项目依赖以下环境变量：
+
+- `OPENAI_API_KEY`  
+- `OPENAI_MODEL`  
+- `OPENAI_BASE_URL`（可选，用于 OpenAI-compatible 服务，如 SiliconFlow、通义等）  
+
+项目中已提供示例文件 `.env.example`。
+
+### 方式一：使用 direnv（推荐）
+
+```bash
+cp .env.example .env
+direnv allow
+```
+
+进入项目目录时，环境变量会自动加载。
+
+### 方式二：不使用 direnv（手动兜底）
+
+```bash
+cp .env.example .env
+source scripts/load_env.sh
+```
+
+⚠️ 必须使用 `source` 执行脚本，确保变量加载到当前 shell。
+
+---
+
+## ⚡ 快速启动（5 分钟跑起来）
 
 ```bash
 git clone https://github.com/jinsie-aitechfun-lab/jinsie-ai-agent-platform.git
 cd jinsie-ai-agent-platform
-````
-
-### 2. 安装依赖
-
-```bash
 pip install -r requirements.txt
-```
-
-### 3. 启动开发服务（推荐）
-
-```bash
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-### 4. 打开 API 文档
+访问 API 文档：  
+👉 http://localhost:8000/docs
 
-👉 [http://localhost:8000/docs](http://localhost:8000/docs)
+---
 
-### 5. 测试示例接口
+## 🧠 架构概览
 
-* `/api/agent/chat`：体验多 Agent 问答
-* `/api/rag/query`：测试知识库检索
-
-> 使用 httpie 快速测试：
-
-```bash
-http :8000/api/agent/chat question="hello"
+```text
+Client
+  |
+  v
+FastAPI API Layer
+  |
+  +-- Agent Orchestration (LangGraph)
+  |     |
+  |     +-- Planner / Executor / Tools
+  |
+  +-- RAG Pipeline
+        |
+        +-- Embedding -> Milvus -> Retrieval
 ```
 
 ---
 
-# 🔥 核心能力（1 分钟看懂）
+## 🧩 核心能力
 
-### ⭐ 可生产部署的 AI 应用底座
+### ✅ Agent 执行层（Engineered Agent）
 
-无需从零搭建，开箱即用。
+- 明确的输入 / 输出契约  
+- 可验证的 JSON 结构化输出  
+- 容错解析与调试支持  
 
-### ⭐ RAG + Agent 一体化
+### ✅ RAG 管道
 
-企业级知识库 + 多智能体协同。
+- 文档分段与向量化  
+- Milvus 向量存储与检索  
+- 可替换 Embedding / Retriever  
 
-### ⭐ 工程化结构完善
+### ✅ 工程化 API
 
-目录规范、组件可复用、易扩展。
+- FastAPI 路由分层  
+- Pydantic 数据模型  
+- 自动 Swagger 文档  
 
-### ⭐ 云原生友好
+### ✅ 云原生友好
 
-FastAPI + Docker，可直接上云（阿里云、腾讯云、移动云）。
-
----
-
-# 🧩 功能模块
-
-| 模块              | 能力                        |
-| --------------- | ------------------------- |
-| **Multi-Agent** | LangGraph 多 Agent 状态流转、协同 |
-| **RAG**         | 文档分段、嵌入、Milvus 向量检索       |
-| **工具系统**        | 搜索/计算器等，可自定义扩展            |
-| **流式输出**        | Token 级实时响应               |
-| **API 服务化**     | 标准化企业 API，Swagger 自动文档    |
-| **Docker 部署**   | 一键容器化                     |
+- Docker 容器化  
+- 易于部署到阿里云 / 腾讯云 / 私有云  
 
 ---
 
-# 🏗️ 项目结构（工程级）
+## 🖥️ CLI 使用方式与示例
+
+本项目提供了一个 **最小但工程化的 CLI 工具**，用于在命令行中执行一次 Agent 调用。  
+该工具主要用于：
+
+- 调试与验证 Prompt 行为  
+- 校验 Agent 输出是否符合严格 JSON 结构  
+- 生成可复现、可提交的示例结果  
+
+### 查看帮助信息
+
+```bash
+python -m scripts.run_agent_once -h
+```
+
+该命令会输出所有可用参数及使用说明。
+
+### 执行一次 Agent 调用
+
+```bash
+python -m scripts.run_agent_once "生成一个严格 JSON 执行计划"
+```
+
+说明：
+
+- 执行结果会直接输出到标准输出（stdout）  
+- 输出内容必须是 **严格的 JSON 对象**  
+- 在输出前会进行结构校验  
+
+### 将输出保存为文件（推荐方式）
+
+```bash
+python -m scripts.run_agent_once "生成一个严格 JSON 执行计划" \
+  --output-file docs/samples/agent_output.json
+```
+
+说明：
+
+- 校验通过后的 JSON 结果会保存到指定路径  
+- 若父目录不存在，将自动创建  
+- **推荐用于生成文档示例或测试样本**  
+
+### 使用文件作为输入（替代命令行文本）
+
+```bash
+python -m scripts.run_agent_once \
+  --input-file docs/samples/agent_plan_prompt.txt \
+  --output-file docs/samples/agent_output.json
+```
+
+该方式适用于：
+
+- Prompt 内容较长  
+- 需要进行版本管理的 Prompt  
+- 需要多次复用的输入  
+
+### 调试非法输出
+
+当模型输出无法解析为合法 JSON 时：
+
+- 程序会立即失败并给出明确错误提示  
+- **完整的原始模型输出** 会被保留在本地：
+
+```text
+docs-private/_debug/last_agent_raw.txt
+```
+
+该文件仅用于本地调试，**不应提交到仓库**。
+
+---
+
+## 🏗️ 项目结构
 
 ```plaintext
 app/
-  ├── agents/          # 多智能体工作流（LangGraph）
-  ├── rag/             # RAG 管道、嵌入、索引
+  ├── agents/          # Agent / Workflow（LangGraph）
+  ├── rag/             # RAG 管道、Embedding、检索
   ├── api/             # FastAPI 路由
   ├── core/            # 配置、初始化、基础组件
-  ├── services/        # 工具、业务服务
+  ├── services/        # 业务服务 / 工具封装
   └── models/          # Pydantic 数据模型
 docs/
   ├── assets/          # Logo / 架构图 / Demo
-  └── notes.md         # 项目价值说明（企业内部评估草稿）
+  ├── architecture/   # 架构与工程说明
+  └── samples/         # CLI / Agent 输出示例
+scripts/
+  ├── run_agent_once.py
+  └── load_env.sh
 tests/
-  └── ...              # 单测（可选）
+  └── ...
 ```
 
 ---
 
-# 🧠 架构图（占位，可替换）
+## 🎬 Demo（占位）
 
-建议将架构图放到：
+建议提供一段 20–40 秒的演示动图，展示：
 
-* `docs/assets/architecture.png`
+1. Agent 接收请求  
+2. 执行规划 / 调用工具 / RAG  
+3. 返回结构化结果  
 
-并在此处引用：
+文件路径建议：
 
-```markdown
-![Architecture](docs/assets/architecture.png)
-```
-
-> 建议展示：请求进入 FastAPI → 路由 → Agent / RAG 模块 → Milvus → 返回响应。
-
----
-
-# 🎬 Demo（占位）
-
-建议录制一段 20–40 秒的演示动图，展示：
-
-1. 上传文档构建知识库
-2. 调用多 Agent 问答接口
-3. 实时返回结果
-
-文件放在：
-
-* `docs/assets/demo.gif`
-
-在此处引用：
-
-```markdown
-![Demo](docs/assets/demo.gif)
+```text
+docs/assets/demo.gif
 ```
 
 ---
 
-# 🧪 示例：创建一个简单 Agent
+## 🤝 Contributing
 
-```python
-from langgraph.graph import StateGraph, END
+欢迎以下类型的轻量贡献：
 
-class AgentState:
-    question: str
-    answer: str
-
-def answer_node(state: AgentState):
-    state.answer = f"回答：{state.question}"
-    return state
-
-workflow = StateGraph(AgentState)
-workflow.add_node("answer", answer_node)
-workflow.set_entry_point("answer")
-workflow.add_edge("answer", END)
-
-chat_agent = workflow.compile()
-```
-
----
-
-# 🐳 Docker 部署（可选）
-
-```bash
-docker build -t jinsie-ai-agent .
-docker run -p 8000:8000 jinsie-ai-agent
-```
-
-> 部署到云环境时，可结合阿里云 / 腾讯云 / 移动云的容器服务使用。
-
----
-
-# 📘 文档
-
-| 文档                | 说明                    |
-| ----------------- | --------------------- |
-| `README.md`       | 使用者 & 维护者）       |
-| `docs/notes.md`   | 项目应用价值说明（企业应用场景草稿） |
-| `CONTRIBUTING.md` | 贡献指南（保护核心逻辑，由维护者主导）   |
-
----
-
-# 🤝 Contributing
-
-本项目欢迎以下类型的轻量贡献：
-
-* 文档改进
-* 示例补充
-* 拼写 / 注释优化
+- 文档改进  
+- 示例补充  
+- Bug 修复（非核心逻辑）  
 
 为保证架构一致性：
 
-* **核心模块（如 `app/agents`, `app/rag`, `app/pipelines`, `app/core`）由维护者统一管理。**
+- 核心模块（`app/agents`, `app/rag`, `app/core`）由维护者统一管理  
 
-详情请参见：[Contributing Guide](CONTRIBUTING.md)
+详见 `CONTRIBUTING.md`。
 
 ---
 
-# 📄 License
+## 📄 License
 
-MIT License
-
-Copyright (c) 2025
-**Jinsie | AITechFun Lab**
+MIT License  
+© 2025 Jinsie | AITechFun Lab

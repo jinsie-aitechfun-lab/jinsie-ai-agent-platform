@@ -1,0 +1,47 @@
+git commit -m "feat(agent): add single-run runner with strict JSON guardrails and env fallback"
+git commit -m "feat(agent): add single-run runner with strict JSON guardrails and env fallback"
+{
+  "task_summary": "生成一个包含 steps 数组的任务",
+  "steps": [
+    {
+      "step_id": "step_1",
+      "title": "定义任务摘要",
+      "description": "编写 task_summary 字段的内容",
+      "dependencies": [],
+      "deliverable": "task_summary 字段的内容",
+      "acceptance": "task_summary 字段包含 '生成一个包含 steps 数组的任务'"
+    },
+    {
+      "step_id": "step_2",
+      "title": "定义 steps 数组",
+      "description": "创建 steps 数组并包含两个步骤",
+      "dependencies": [
+        "step_1"
+      ],
+      "deliverable": "steps 数组",
+      "acceptance": "steps 数组包含两个步骤，每个步骤有 title 和 dependencies 字段"
+    },
+    {
+      "step_id": "step_3",
+      "title": "定义第一个步骤",
+      "description": "为第一个步骤设置 title 和 dependencies",
+      "dependencies": [
+        "step_2"
+      ],
+      "deliverable": "第一个步骤的定义",
+      "acceptance": "第一个步骤的 title 为 '定义任务摘要'"
+    },
+    {
+      "step_id": "step_4",
+      "title": "定义第二个步骤",
+      "description": "为第二个步骤设置 title 和 dependencies",
+      "dependencies": [
+        "step_2"
+      ],
+      "deliverable": "第二个步骤的定义",
+      "acceptance": "第二个步骤的 title 为 '定义 steps 数组'"
+    }
+  ],
+  "assumptions": [],
+  "risks": []
+}
