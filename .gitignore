@@ -1,58 +1,77 @@
-# Python / FastAPI / AI 项目通用 .gitignore
+# =========================
+# Python / FastAPI / AI Project
+# =========================
 
-# 虚拟环境
+# Virtual environments
 .venv/
 venv/
 env/
 
-# Python 缓存
+# Python cache
 __pycache__/
 *.py[cod]
-*.pyo
 *.pyd
-*.pytest_cache/
 .pytest_cache/
 *.egg-info/
 
-# IDE / 编辑器
+# =========================
+# IDE / Editor
+# =========================
+
 # VS Code (selective)
 .vscode/*
 !.vscode/settings.json
 
+# JetBrains
 .idea/
+
+# Editor temp files
 *.swp
 *.swo
 
-# 日志 & 临时文件
+# =========================
+# Logs & temp files
+# =========================
 logs/
 *.log
 tmp/
 temp/
 
-# 环境配置
+# =========================
+# Environment variables (secrets)
+# =========================
 .env
 .env.*
+!.env.example
 
-# 构建输出
+# =========================
+# Build artifacts
+# =========================
 dist/
 build/
 site/
 
+# =========================
 # Jupyter
+# =========================
 .ipynb_checkpoints/
 
-# 数据 / 模型（如有）
+# =========================
+# Data / Models (optional)
+# =========================
 data/
 datasets/
 checkpoints/
 models/
 
-# 私密文档（重要）
+# =========================
+# Private docs
+# =========================
 docs-private/
-# OS 文件
+
+# =========================
+# OS files
+# =========================
 .DS_Store
 Thumbs.db
-
-# macOS
-.DS_Store
-
+desktop.ini
