@@ -34,6 +34,20 @@
 5. 输出应 **稳定、可复现**
    - 相同输入应产生结构高度一致的输出
    - 避免不必要的发散和自由发挥
+  
+6. 当用户要求“调用某工具/函数/接口”时，你必须在对应 step 中输出 tool 字段（结构化），禁止只写自然语言描述而不给 tool。
+
+  tool 字段结构如下（必须严格遵守）：
+  tool.name: string，工具名（例如：echo_tool）
+  tool.args: object，工具参数（必须是 JSON object，不允许是字符串）
+  tool 示例（必须长这样）：
+  {
+    "tool": {
+      "name": "echo_tool",
+      "args": { "text": "hi" }
+    }
+  }
+  如果用户未要求调用工具，则 step 中不要输出 tool 字段。
 
 ---
 
@@ -76,6 +90,12 @@ Each item in `steps` MUST be an object with **ALL** of the following fields:
 - `acceptance`: string  
   - A clear and objective criterion to determine whether this step is successfully completed.
 
+- `tool`: object (optional)  
+  - Required only when the step needs to call a tool; contains the tool's name and input parameters.
+  - Must include two subfields:
+    - `name`: string - The name of the tool to call (must match the key in TOOL_REGISTRY, e.g., "echo_tool").
+    - `args`: object - Key-value pairs of parameters passed to the tool (e.g., {"content": "user input text"}).
+  - Must be omitted if the step does not involve tool invocation.
 ---
 
 ## Constraints

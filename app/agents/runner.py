@@ -1,4 +1,5 @@
 from __future__ import annotations
+from app.agents.plan_executor import execute_plan
 
 import json
 from pathlib import Path
@@ -146,4 +147,26 @@ def run_agent_once_json(
         ) from e
 
     validate_payload(payload)
+    payload = execute_plan(payload)
+    
+    def finalize_output(payload: dict) -> dict:
+        """
+        If execution_results exists and the last tool call succeeded, return the tool output only.
+        Fallback to original payload otherwise.
+        """
+        results = payload.get("execution_results")
+        if not results or not isinstance(results, list):
+            return payload
+
+        last = results[-1]
+        if not isinstance(last, dict):
+            return payload
+
+        if last.get("ok") is True:
+            out = last.get("output")
+            if isinstance(out, dict):
+                return out
+
+        return payload
+    payload = finalize_output(payload)
     return payload
