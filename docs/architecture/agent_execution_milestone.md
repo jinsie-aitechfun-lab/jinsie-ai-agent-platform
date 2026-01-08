@@ -60,8 +60,14 @@ python scripts/run_agent_once.py "请调用一个名为 echo_tool 的工具，�
 期望行为：
 
 - 工具被正确调用
+
 - 执行结果包含 `{"echo": "hi"}`（在最终输出或执行轨迹中体现）
+
 - 输出为严格 JSON
+
+- 默认输出：最终结果（裁剪）
+
+  `--debug`：完整 payload（含 steps + execution_results）
 
 ---
 

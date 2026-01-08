@@ -1,0 +1,31 @@
+{
+  "task_summary": "调用 echo_tool 并输出结果",
+  "steps": [
+    {
+      "step_id": "step_1",
+      "title": "调用 echo_tool",
+      "description": "使用 echo_tool 输出 'hi'",
+      "dependencies": [],
+      "deliverable": "工具输出结果",
+      "acceptance": "输出结果为 'hi'",
+      "tool": {
+        "name": "echo_tool",
+        "args": {
+          "text": "hi"
+        }
+      }
+    }
+  ],
+  "assumptions": [],
+  "risks": [],
+  "execution_results": [
+    {
+      "step_id": "step_1",
+      "tool": "echo_tool",
+      "ok": true,
+      "output": {
+        "echo": "hi"
+      }
+    }
+  ]
+}
