@@ -15,7 +15,10 @@ __pycache__/
 *.egg-info/
 
 # IDE / 编辑器
-.vscode/
+# VS Code (selective)
+.vscode/*
+!.vscode/settings.json
+
 .idea/
 *.swp
 *.swo
