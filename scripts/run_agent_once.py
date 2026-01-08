@@ -19,7 +19,9 @@ def main() -> None:
     parser.add_argument("query", nargs="?", help="User query text")
     parser.add_argument("--input-file", help="Path to a text file containing the user query")
     parser.add_argument("--output-file", help="Save JSON output to a file (e.g., docs/samples/agent_output.json)")
+    parser.add_argument("--debug", action="store_true", help="Print full payload including steps and execution_results")
     args = parser.parse_args()
+
 
     if args.input_file:
         user_input = load_text(args.input_file).strip()
@@ -33,6 +35,7 @@ def main() -> None:
         user_input,
         prompt_path="app/prompts/system/agent_system.md",
         temperature=0.2,
+        debug=args.debug,
     )
 
     pretty = json.dumps(payload, ensure_ascii=False, indent=2)

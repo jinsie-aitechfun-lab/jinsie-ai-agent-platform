@@ -99,6 +99,7 @@ def run_agent_once_json(
     prompt_path: str = "app/prompts/system/agent_system.md",
     temperature: float = 0.2,
     max_tokens: int = 512,
+    debug: bool = False,
     service: Optional[ChatCompletionService] = None,
 ) -> Dict[str, Any]:
     raw = run_agent_once_raw(
@@ -149,24 +150,37 @@ def run_agent_once_json(
     validate_payload(payload)
     payload = execute_plan(payload)
     
-    def finalize_output(payload: dict) -> dict:
+    def finalize_output(payload: dict, debug: bool) -> dict:
         """
-        If execution_results exists and the last tool call succeeded, return the tool output only.
-        Fallback to original payload otherwise.
+        Decide what to return to the caller.
+
+        - debug=True: always return full payload
+        - debug=False:
+            - if any step failed -> return full payload
+            - if all steps succeeded -> return last tool output
         """
+        if debug:
+            return payload
+
         results = payload.get("execution_results")
+
         if not results or not isinstance(results, list):
             return payload
+
+        # 如果有任何一步失败，返回完整 payload（便于看 error）
+        for r in results:
+            if not r.get("ok", True):
+                return payload
 
         last = results[-1]
         if not isinstance(last, dict):
             return payload
 
-        if last.get("ok") is True:
-            out = last.get("output")
-            if isinstance(out, dict):
-                return out
+        out = last.get("output")
+        if isinstance(out, dict):
+            return out
 
         return payload
-    payload = finalize_output(payload)
-    return payload
+
+    return finalize_output(payload, debug=debug)
+
