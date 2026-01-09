@@ -66,6 +66,23 @@ def validate_payload(payload: dict) -> None:
 
         if not isinstance(step["dependencies"], list) or not all(isinstance(x, str) for x in step["dependencies"]):
             raise ValueError(f"steps[{i}].dependencies must be an array of strings")
+        
+        # tool can be:
+        # 1) "echo_tool"
+        # 2) {"name": "echo_tool", "args": {...}}
+        if "tool" in step:
+            tool = step["tool"]
+            if not (isinstance(tool, str) or isinstance(tool, dict)):
+                raise ValueError(f"steps[{i}].tool must be a string or an object")
+
+        # args can exist either at step-level (when tool is string) or inside tool object
+        if "args" in step and not isinstance(step["args"], dict):
+            raise ValueError(f"steps[{i}].args must be an object")
+
+        if "tool" in step and isinstance(step["tool"], dict):
+            tool_obj = step["tool"]
+            if "args" in tool_obj and not isinstance(tool_obj["args"], dict):
+                raise ValueError(f"steps[{i}].tool.args must be an object")
 
 
 def run_agent_once_raw(
