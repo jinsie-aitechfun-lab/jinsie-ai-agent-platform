@@ -4,6 +4,7 @@ from typing import Any, Dict, List
 
 from app.tools.base import ToolSpec
 from app.tools.echo_tool import ECHO_TOOL
+from app.tools.time_tool import TIME_TOOL
 
 
 _TOOL_REGISTRY: Dict[str, ToolSpec] = {}
@@ -43,6 +44,7 @@ def dispatch_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 def bootstrap_default_tools() -> None:
     register(ECHO_TOOL)
+    register(TIME_TOOL)
 
 
 bootstrap_default_tools()

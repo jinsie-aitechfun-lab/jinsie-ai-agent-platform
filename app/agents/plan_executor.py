@@ -38,10 +38,44 @@ def execute_plan(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
     steps: List[Dict[str, Any]] = payload.get("steps", [])
     results: List[Dict[str, Any]] = []
+    status: Dict[str, Dict[str, Any]] = {}
 
     for step in steps:
         step_id = step.get("step_id")
         name = None
+        deps = step.get("dependencies") or []
+
+        # --- dependency checks ---
+        unknown = [d for d in deps if d not in status]
+        if unknown:
+            results.append(
+                {
+                    "step_id": step_id,
+                    "tool": None,
+                    "ok": False,
+                    "skipped": False,
+                    "reason": f"unknown dependency: {unknown}",
+                    "error": f"unknown dependency: {unknown}",
+                }
+            )
+            status[str(step_id)] = {"ok": False}
+            continue
+
+        failed = [d for d in deps if not status.get(d, {}).get("ok", False)]
+        if failed:
+            results.append(
+                {
+                    "step_id": step_id,
+                    "tool": None,
+                    "ok": False,
+                    "skipped": True,
+                    "reason": f"skipped due to failed dependency: {failed}",
+                    "error": f"dependency failed: {failed}",
+                }
+            )
+            status[str(step_id)] = {"ok": False}
+            continue
+
         try:
             name, args = _parse_tool(step)
             out = dispatch_tool(name, args)
@@ -50,17 +84,23 @@ def execute_plan(payload: Dict[str, Any]) -> Dict[str, Any]:
                     "step_id": step_id,
                     "tool": name,
                     "ok": True,
+                    "skipped": False,
+                    "reason": None,
                     "output": out,
                 }
             )
+            status[str(step_id)] = {"ok": True}
         except Exception as e:
             results.append(
                 {
                     "step_id": step_id,
                     "tool": name or (step.get("tool") if isinstance(step.get("tool"), str) else None),
                     "ok": False,
+                    "skipped": False,
+                    "reason": None,
                     "error": str(e),
                 }
             )
+            status[str(step_id)] = {"ok": False}
 
     return {**payload, "execution_results": results}

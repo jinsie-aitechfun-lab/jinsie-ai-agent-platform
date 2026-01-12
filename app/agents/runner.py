@@ -42,6 +42,7 @@ def validate_payload(payload: dict) -> None:
         "dependencies",
         "deliverable",
         "acceptance",
+        "tool",
     ]
 
     seen_ids = set()
@@ -67,22 +68,34 @@ def validate_payload(payload: dict) -> None:
         if not isinstance(step["dependencies"], list) or not all(isinstance(x, str) for x in step["dependencies"]):
             raise ValueError(f"steps[{i}].dependencies must be an array of strings")
         
-        # tool can be:
+        # ---- tool schema checks (Day7) ----
+        # tool must be one of:
         # 1) "echo_tool"
         # 2) {"name": "echo_tool", "args": {...}}
-        if "tool" in step:
-            tool = step["tool"]
-            if not (isinstance(tool, str) or isinstance(tool, dict)):
-                raise ValueError(f"steps[{i}].tool must be a string or an object")
+        tool = step.get("tool")
+        if not (isinstance(tool, str) or isinstance(tool, dict)):
+            raise ValueError(f"steps[{i}].tool must be a string or an object")
 
-        # args can exist either at step-level (when tool is string) or inside tool object
+        # args can exist either:
+        # - at step-level (when tool is string)
+        # - inside tool object (when tool is dict)
         if "args" in step and not isinstance(step["args"], dict):
             raise ValueError(f"steps[{i}].args must be an object")
 
-        if "tool" in step and isinstance(step["tool"], dict):
-            tool_obj = step["tool"]
-            if "args" in tool_obj and not isinstance(tool_obj["args"], dict):
+        if isinstance(tool, str):
+            if not tool.strip():
+                raise ValueError(f"steps[{i}].tool must be a non-empty string")
+            # step-level args allowed
+        else:
+            name = tool.get("name")
+            args = tool.get("args", {})
+            if not isinstance(name, str) or not name.strip():
+                raise ValueError(f"steps[{i}].tool.name must be a non-empty string")
+            if "args" in tool and not isinstance(args, dict):
                 raise ValueError(f"steps[{i}].tool.args must be an object")
+            # optional: discourage duplicated args locations (keep tolerant)
+            # if "args" in step:
+            #     raise ValueError(f"steps[{i}] has both step.args and tool.args; keep only one")
 
 
 def run_agent_once_raw(
@@ -166,38 +179,10 @@ def run_agent_once_json(
 
     validate_payload(payload)
     payload = execute_plan(payload)
-    
-    def finalize_output(payload: dict, debug: bool) -> dict:
-        """
-        Decide what to return to the caller.
 
-        - debug=True: always return full payload
-        - debug=False:
-            - if any step failed -> return full payload
-            - if all steps succeeded -> return last tool output
-        """
-        if debug:
-            return payload
-
-        results = payload.get("execution_results")
-
-        if not results or not isinstance(results, list):
-            return payload
-
-        # 如果有任何一步失败，返回完整 payload（便于看 error）
-        for r in results:
-            if not r.get("ok", True):
-                return payload
-
-        last = results[-1]
-        if not isinstance(last, dict):
-            return payload
-
-        out = last.get("output")
-        if isinstance(out, dict):
-            return out
-
-        return payload
-
+    # Day7: keep output contract stable for samples/tests/consumers.
+    # - debug=True: still returns full payload
+    # - debug=False: also returns full payload (no implicit shape changes)
+    return payload
     return finalize_output(payload, debug=debug)
 
