@@ -166,6 +166,7 @@ def run_agent_once_json(
 
     validate_payload(payload)
     payload = execute_plan(payload)
+    #finalize_output 先不调用这个函数
     
     def finalize_output(payload: dict, debug: bool) -> dict:
         """
@@ -199,5 +200,5 @@ def run_agent_once_json(
 
         return payload
 
-    return finalize_output(payload, debug=debug)
-
+# Always return full payload to keep output contract stable.
+    return payload

@@ -10,37 +10,37 @@
     {
       "step_id": "step_1",
       "title": "第一步 echo_tool",
-      "description": "调用 echo_tool 返回指定文本。",
+      "description": "调用 echo_tool 返回固定文本 'hello'",
       "dependencies": [],
       "deliverable": "包含 echo 字段的 JSON 输出",
-      "acceptance": "输出中包含 {\"echo\": \"指定文本\"}",
+      "acceptance": "输出中包含 {\"echo\": \"hello\"}",
       "tool": {
         "name": "echo_tool",
         "args": {
-          "text": "指定文本"
+          "text": "hello"
         }
       }
     },
     {
       "step_id": "step_2",
       "title": "第二步 echo_tool",
-      "description": "调用 echo_tool 返回指定文本。",
+      "description": "调用 echo_tool 返回固定文本 'world'",
       "dependencies": [
         "step_1"
       ],
       "deliverable": "包含 echo 字段的 JSON 输出",
-      "acceptance": "输出中包含 {\"echo\": \"指定文本\"}",
+      "acceptance": "输出中包含 {\"echo\": \"world\"}",
       "tool": {
         "name": "echo_tool",
         "args": {
-          "text": "指定文本"
+          "text": "world"
         }
       }
     },
     {
       "step_id": "step_3",
       "title": "第三步 get_time",
-      "description": "获取当前时间。",
+      "description": "调用 get_time 返回当前时间",
       "dependencies": [
         "step_2"
       ],
@@ -58,7 +58,7 @@
       "tool": "echo_tool",
       "ok": true,
       "output": {
-        "echo": "指定文本"
+        "echo": "hello"
       }
     },
     {
@@ -66,7 +66,7 @@
       "tool": "echo_tool",
       "ok": true,
       "output": {
-        "echo": "指定文本"
+        "echo": "world"
       }
     },
     {
@@ -74,7 +74,7 @@
       "tool": "get_time",
       "ok": true,
       "output": {
-        "now_utc": "2026-01-12T08:54:06.149296+00:00"
+        "now_utc": "2026-01-12T09:06:24.210353+00:00"
       }
     }
   ]
