@@ -1,29 +1,81 @@
 {
-  "task_summary": "生成一个包含 steps 数组的严格 JSON",
+  "task_summary": "执行三个步骤：前两步 echo_tool，最后一步 get_time",
+  "assumptions": [
+    "用户希望得到原样输出和当前时间"
+  ],
+  "risks": [
+    "无"
+  ],
   "steps": [
     {
       "step_id": "step_1",
-      "title": "定义第一步",
-      "description": "定义第一步的标题和依赖项",
+      "title": "第一步 echo_tool",
+      "description": "调用 echo_tool 返回指定文本。",
       "dependencies": [],
-      "deliverable": "第一步的描述",
-      "acceptance": "第一步的验收标准"
+      "deliverable": "包含 echo 字段的 JSON 输出",
+      "acceptance": "输出中包含 {\"echo\": \"指定文本\"}",
+      "tool": {
+        "name": "echo_tool",
+        "args": {
+          "text": "指定文本"
+        }
+      }
     },
     {
       "step_id": "step_2",
-      "title": "定义第二步",
-      "description": "定义第二步的标题和依赖项",
+      "title": "第二步 echo_tool",
+      "description": "调用 echo_tool 返回指定文本。",
       "dependencies": [
         "step_1"
       ],
-      "deliverable": "第二步的描述",
-      "acceptance": "第二步的验收标准"
+      "deliverable": "包含 echo 字段的 JSON 输出",
+      "acceptance": "输出中包含 {\"echo\": \"指定文本\"}",
+      "tool": {
+        "name": "echo_tool",
+        "args": {
+          "text": "指定文本"
+        }
+      }
+    },
+    {
+      "step_id": "step_3",
+      "title": "第三步 get_time",
+      "description": "获取当前时间。",
+      "dependencies": [
+        "step_2"
+      ],
+      "deliverable": "包含当前时间的 JSON 输出",
+      "acceptance": "输出中包含当前时间",
+      "tool": {
+        "name": "get_time",
+        "args": {}
+      }
     }
   ],
-  "assumptions": [
-    "假设用户已经了解 JSON 的基本结构"
-  ],
-  "risks": [
-    "可能存在未预见的输入导致的结构变化"
+  "execution_results": [
+    {
+      "step_id": "step_1",
+      "tool": "echo_tool",
+      "ok": true,
+      "output": {
+        "echo": "指定文本"
+      }
+    },
+    {
+      "step_id": "step_2",
+      "tool": "echo_tool",
+      "ok": true,
+      "output": {
+        "echo": "指定文本"
+      }
+    },
+    {
+      "step_id": "step_3",
+      "tool": "get_time",
+      "ok": true,
+      "output": {
+        "now_utc": "2026-01-12T08:54:06.149296+00:00"
+      }
+    }
   ]
 }
