@@ -1,5 +1,5 @@
 {
-  "task_summary": "执行三个步骤：前两步 echo_tool，最后一步 get_time",
+  "task_summary": "执行三个步骤：前两步回显输入文本，最后一步获取当前时间",
   "assumptions": [
     "用户希望得到原样输出和当前时间"
   ],
@@ -9,11 +9,11 @@
   "steps": [
     {
       "step_id": "step_1",
-      "title": "第一步 echo_tool",
-      "description": "调用 echo_tool 返回固定文本 'hello'",
+      "title": "第一步回显",
+      "description": "调用 echo_tool 回显输入文本。",
       "dependencies": [],
       "deliverable": "包含 echo 字段的 JSON 输出",
-      "acceptance": "输出中包含 {\"echo\": \"hello\"}",
+      "acceptance": "输出中包含 {\"echo\": <用户输入>}",
       "tool": {
         "name": "echo_tool",
         "args": {
@@ -23,13 +23,11 @@
     },
     {
       "step_id": "step_2",
-      "title": "第二步 echo_tool",
-      "description": "调用 echo_tool 返回固定文本 'world'",
-      "dependencies": [
-        "step_1"
-      ],
+      "title": "第二步回显",
+      "description": "调用 echo_tool 回显输入文本。",
+      "dependencies": [],
       "deliverable": "包含 echo 字段的 JSON 输出",
-      "acceptance": "输出中包含 {\"echo\": \"world\"}",
+      "acceptance": "输出中包含 {\"echo\": <用户输入>}",
       "tool": {
         "name": "echo_tool",
         "args": {
@@ -39,11 +37,9 @@
     },
     {
       "step_id": "step_3",
-      "title": "第三步 get_time",
-      "description": "调用 get_time 返回当前时间",
-      "dependencies": [
-        "step_2"
-      ],
+      "title": "获取当前时间",
+      "description": "调用 get_time 获取当前时间。",
+      "dependencies": [],
       "deliverable": "包含当前时间的 JSON 输出",
       "acceptance": "输出中包含当前时间",
       "tool": {
@@ -74,7 +70,7 @@
       "tool": "get_time",
       "ok": true,
       "output": {
-        "now_utc": "2026-01-12T09:06:24.210353+00:00"
+        "now_utc": "2026-01-12T09:21:49.423605+00:00"
       }
     }
   ]
