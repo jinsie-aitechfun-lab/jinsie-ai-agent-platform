@@ -35,32 +35,108 @@ def execute_plan(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
     Execute tools described in payload["steps"][].tool
     Returns: payload + execution_results (JSON-safe)
+
+    Execution semantics (Day7):
+    - unknown dependency -> fail-fast for that step (do not execute)
+    - dependency failed/skipped -> skip that step (do not execute)
     """
     steps: List[Dict[str, Any]] = payload.get("steps", [])
     results: List[Dict[str, Any]] = []
 
+    # Precompute all declared step_ids (for dependency existence check)
+    declared_ids: List[str] = []
+    for s in steps:
+        sid = s.get("step_id")
+        if isinstance(sid, str) and sid.strip():
+            declared_ids.append(sid)
+
+    # Track step status by step_id
+    status: Dict[str, Dict[str, Any]] = {}  # {step_id: {"ok": bool, "skipped": bool}}
+
     for step in steps:
         step_id = step.get("step_id")
+        deps = step.get("dependencies") or []
         name = None
+
+        # Default result shape (stable fields)
+        base: Dict[str, Any] = {
+            "step_id": step_id,
+            "tool": None,
+            "ok": True,
+            "skipped": False,
+            "reason": None,
+        }
+
+        # --- dependency existence check ---
+        unknown = []
+        if isinstance(deps, list):
+            for d in deps:
+                if isinstance(d, str) and d not in declared_ids:
+                    unknown.append(d)
+        else:
+            # schema should prevent this, but keep safe
+            unknown = ["<invalid dependencies>"]
+
+        if unknown:
+            r = {
+                **base,
+                "ok": False,
+                "skipped": False,
+                "reason": f"unknown dependency: {unknown}",
+                "error": f"unknown dependency: {unknown}",
+            }
+            results.append(r)
+            if isinstance(step_id, str):
+                status[step_id] = {"ok": False, "skipped": False}
+            continue
+
+        # --- dependency success check (failed or skipped -> skip current) ---
+        failed_deps = []
+        if isinstance(deps, list):
+            for d in deps:
+                st = status.get(d)
+                # If dependency hasn't run yet (out-of-order), treat as failed prerequisite.
+                if not st or not st.get("ok", False) or st.get("skipped", False):
+                    failed_deps.append(d)
+
+        if failed_deps:
+            r = {
+                **base,
+                "ok": False,
+                "skipped": True,
+                "reason": f"dependency not satisfied: {failed_deps}",
+            }
+            results.append(r)
+            if isinstance(step_id, str):
+                status[step_id] = {"ok": False, "skipped": True}
+            continue
+
+        # --- execute tool ---
         try:
             name, args = _parse_tool(step)
             out = dispatch_tool(name, args)
-            results.append(
-                {
-                    "step_id": step_id,
-                    "tool": name,
-                    "ok": True,
-                    "output": out,
-                }
-            )
+            r = {
+                **base,
+                "tool": name,
+                "ok": True,
+                "skipped": False,
+                "reason": None,
+                "output": out,
+            }
+            results.append(r)
+            if isinstance(step_id, str):
+                status[step_id] = {"ok": True, "skipped": False}
         except Exception as e:
-            results.append(
-                {
-                    "step_id": step_id,
-                    "tool": name or (step.get("tool") if isinstance(step.get("tool"), str) else None),
-                    "ok": False,
-                    "error": str(e),
-                }
-            )
+            r = {
+                **base,
+                "tool": name or (step.get("tool") if isinstance(step.get("tool"), str) else None),
+                "ok": False,
+                "skipped": False,
+                "reason": None,
+                "error": str(e),
+            }
+            results.append(r)
+            if isinstance(step_id, str):
+                status[step_id] = {"ok": False, "skipped": False}
 
     return {**payload, "execution_results": results}
