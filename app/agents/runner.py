@@ -34,7 +34,7 @@ def validate_payload(payload: dict) -> None:
     if not isinstance(payload["risks"], list) or not all(isinstance(x, str) for x in payload["risks"]):
         raise ValueError("risks must be an array of strings")
 
-    # ---- steps schema checks (Day3 V1) ----
+    # ---- steps schema checks (plan schema v1) ----
     required_step_fields = [
         "step_id",
         "title",

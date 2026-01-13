@@ -76,7 +76,7 @@ def run_once(user_input: str) -> Dict[str, Any]:
 
         # Step E：返回最终结果
         if second.type != "text":
-            # Day6/Day7 的最小闭环：第二次模型调用应输出最终 text/JSON
+            # Minimal contract closure: the second model call must output final text/JSON.
             raise RuntimeError(f"Expected final text response, got: {second.type}")
 
         return {
