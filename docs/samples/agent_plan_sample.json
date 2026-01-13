@@ -1,55 +1,23 @@
 {
-  "task_summary": "Validate a plan contract and demonstrate deterministic tool execution",
+  "task_summary": "echo a short message",
   "assumptions": [
-    "The tool registry contains echo_tool and get_time",
-    "The executor enforces dependency resolution and produces execution_results"
+    "inputs are provided by user"
   ],
   "risks": [
-    "Unknown tools may cause a step to fail and block downstream steps",
-    "Unknown dependencies may block execution at planning time or during execution"
+    "none"
   ],
   "steps": [
     {
       "step_id": "step_1",
-      "title": "Emit a deterministic preflight note",
-      "description": "Use echo_tool to record a stable preflight message for traceability.",
+      "title": "echo the message",
+      "description": "Call echo_tool with a short text.",
       "dependencies": [],
-      "deliverable": "A preflight note captured via echo_tool output.",
-      "acceptance": "execution_results contains step_1 with ok=true and output.echo equals the provided text.",
+      "deliverable": "A tool output containing the echoed text.",
+      "acceptance": "execution_results contains step_1 with ok=true and output.echo equals the input text.",
       "tool": {
         "name": "echo_tool",
         "args": {
-          "text": "Preflight: validate contract fields and dependency semantics."
-        }
-      }
-    },
-    {
-      "step_id": "step_2",
-      "title": "Query current time from tool",
-      "description": "Call get_time to obtain the current time in a JSON-safe format.",
-      "dependencies": [
-        "step_1"
-      ],
-      "deliverable": "A JSON-safe timestamp returned by get_time.",
-      "acceptance": "execution_results contains step_2 with ok=true and output is JSON-safe.",
-      "tool": {
-        "name": "get_time",
-        "args": {}
-      }
-    },
-    {
-      "step_id": "step_3",
-      "title": "Summarize the run deterministically",
-      "description": "Use echo_tool to summarize what was executed and what outputs were produced.",
-      "dependencies": [
-        "step_2"
-      ],
-      "deliverable": "A summary note captured via echo_tool output.",
-      "acceptance": "execution_results contains step_3 with ok=true and output.echo includes references to step_1 and step_2.",
-      "tool": {
-        "name": "echo_tool",
-        "args": {
-          "text": "Summary: executed step_1 preflight, step_2 get_time, and produced JSON-safe outputs."
+          "text": "hello"
         }
       }
     }

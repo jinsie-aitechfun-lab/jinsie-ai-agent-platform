@@ -1,36 +1,35 @@
 {
-  "task_summary": "Demonstrate failure vs blocking semantics for unknown tools and dependencies",
+  "task_summary": "echo a message then read current time",
   "assumptions": [
-    "The executor fails a step when a tool is unknown",
-    "Downstream steps are skipped when dependencies are not satisfied",
-    "The executor appends a __meta__ record at the end of execution_results"
+    "tool registry provides echo_tool and get_time"
   ],
   "risks": [
-    "If step ordering is incorrect, dependency checks may block execution",
-    "If the registry changes, tool availability assumptions may become invalid"
+    "time output format may vary by environment"
   ],
   "steps": [
     {
       "step_id": "step_1",
-      "title": "Attempt an unknown tool to trigger a failure",
-      "description": "Call a non-existent tool name to force the executor to mark this step failed.",
+      "title": "echo the message",
+      "description": "Call echo_tool with a short text.",
       "dependencies": [],
-      "deliverable": "A failed execution result with an error message describing unknown tool.",
-      "acceptance": "execution_results[step_1].ok=false and execution_results[step_1].error contains 'Unknown tool'.",
+      "deliverable": "A tool output containing the echoed text.",
+      "acceptance": "execution_results contains step_1 ok=true and output.echo is present.",
       "tool": {
-        "name": "no_such_tool",
-        "args": {}
+        "name": "echo_tool",
+        "args": {
+          "text": "hello"
+        }
       }
     },
     {
       "step_id": "step_2",
-      "title": "Downstream step should be skipped due to unmet dependency",
-      "description": "This step depends on step_1 and should be skipped when step_1 fails.",
+      "title": "get current time",
+      "description": "Call get_time after step_1 succeeds.",
       "dependencies": [
         "step_1"
       ],
-      "deliverable": "A skipped execution result with dependency-not-satisfied reason.",
-      "acceptance": "execution_results[step_2].skipped=true and reason contains 'dependency not satisfied'.",
+      "deliverable": "A tool output containing current time fields.",
+      "acceptance": "execution_results contains step_2 ok=true and output is JSON-safe.",
       "tool": {
         "name": "get_time",
         "args": {}
