@@ -6,6 +6,10 @@ from typing import Any, Dict, Literal, Tuple
 from app.agents.plan_executor import execute_plan
 from app.agents.plan_validator import validate_execution_results, validate_plan_payload
 
+from pathlib import Path
+import subprocess
+import sys
+
 
 Expectation = Literal["REJECT", "FAILED", "BLOCKED"]
 PlanPolicy = Literal["REQUIRE_VALID", "ALLOW_ERRORS"]
@@ -53,6 +57,11 @@ def _assert_task_status(meta: Dict[str, Any], expected: str) -> list[str]:
 
 
 def main() -> int:
+    # Keep docs/samples in sync with the current contract.
+    gen = Path("scripts/generate_samples.py")
+    if gen.exists():
+        subprocess.run([sys.executable, str(gen)], check=True)
+
     # (case_name, payload, expected_task_status, plan_policy)
     cases: list[Tuple[str, Dict[str, Any], Expectation, PlanPolicy]] = []
 
