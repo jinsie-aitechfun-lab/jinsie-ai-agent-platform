@@ -1,0 +1,53 @@
+name: Contract verification
+
+on:
+  pull_request:
+    branches: [dev]
+  push:
+    branches: [dev]
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
+
+      - name: Compile-time sanity checks
+        run: |
+          python -m py_compile app/agents/plan_executor.py
+          python -m py_compile app/agents/plan_validator.py
+          python -m py_compile app/agents/runner.py
+          python -m py_compile scripts/verify_execution_semantics.py
+          python -m py_compile scripts/generate_samples.py
+
+      - name: Verify execution semantics
+        env:
+          PYTHONPATH: .
+        run: |
+          python scripts/verify_execution_semantics.py | tail -n 3
+          python scripts/verify_execution_semantics.py
+
+      - name: Regenerate public samples
+        env:
+          PYTHONPATH: .
+        run: |
+          python scripts/generate_samples.py
+
+      - name: Assert working tree is clean
+        run: |
+          git diff --exit-code
+          git status --porcelain
