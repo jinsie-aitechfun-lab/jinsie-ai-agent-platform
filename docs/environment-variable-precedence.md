@@ -4,7 +4,7 @@
 > `python-dotenv(load_dotenv, override=False)`，以及它如何与 `direnv` 等
 > Shell 层工具安全协作。  
 >  
-> 本文不涉及学习过程，仅描述**工程结论与规范**。
+> 本文不涉及个人过程，仅描述**工程结论与规范**。
 
 ---
 

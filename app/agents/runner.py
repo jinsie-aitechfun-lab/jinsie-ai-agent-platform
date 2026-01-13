@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from app.services.chat_completion_service import ChatCompletionService
+from app.agents.plan_validator import validate_plan_payload
+
 
 
 def load_text(path: str) -> str:
@@ -16,73 +18,15 @@ def load_text(path: str) -> str:
 
 
 def validate_payload(payload: dict) -> None:
-    # ---- top-level checks ----
-    required_top = ["task_summary", "steps", "assumptions", "risks"]
-    for k in required_top:
-        if k not in payload:
-            raise ValueError(f"missing top-level field: {k}")
+    """
+    Validate plan payload via the canonical validator.
 
-    if not isinstance(payload["task_summary"], str) or not payload["task_summary"].strip():
-        raise ValueError("task_summary must be a non-empty string")
-
-    if not isinstance(payload["steps"], list) or len(payload["steps"]) == 0:
-        raise ValueError("steps must be a non-empty array")
-
-    if not isinstance(payload["assumptions"], list) or not all(isinstance(x, str) for x in payload["assumptions"]):
-        raise ValueError("assumptions must be an array of strings")
-
-    if not isinstance(payload["risks"], list) or not all(isinstance(x, str) for x in payload["risks"]):
-        raise ValueError("risks must be an array of strings")
-
-    # ---- steps schema checks (Day3 V1) ----
-    required_step_fields = [
-        "step_id",
-        "title",
-        "description",
-        "dependencies",
-        "deliverable",
-        "acceptance",
-    ]
-
-    seen_ids = set()
-    for i, step in enumerate(payload["steps"]):
-        if not isinstance(step, dict):
-            raise ValueError(f"steps[{i}] must be an object")
-
-        for k in required_step_fields:
-            if k not in step:
-                raise ValueError(f"steps[{i}] missing field: {k}")
-
-        if not isinstance(step["step_id"], str) or not step["step_id"].strip():
-            raise ValueError(f"steps[{i}].step_id must be a non-empty string")
-
-        if step["step_id"] in seen_ids:
-            raise ValueError(f"duplicate step_id: {step['step_id']}")
-        seen_ids.add(step["step_id"])
-
-        for k in ["title", "description", "deliverable", "acceptance"]:
-            if not isinstance(step[k], str) or not step[k].strip():
-                raise ValueError(f"steps[{i}].{k} must be a non-empty string")
-
-        if not isinstance(step["dependencies"], list) or not all(isinstance(x, str) for x in step["dependencies"]):
-            raise ValueError(f"steps[{i}].dependencies must be an array of strings")
-        
-        # tool can be:
-        # 1) "echo_tool"
-        # 2) {"name": "echo_tool", "args": {...}}
-        if "tool" in step:
-            tool = step["tool"]
-            if not (isinstance(tool, str) or isinstance(tool, dict)):
-                raise ValueError(f"steps[{i}].tool must be a string or an object")
-
-        # args can exist either at step-level (when tool is string) or inside tool object
-        if "args" in step and not isinstance(step["args"], dict):
-            raise ValueError(f"steps[{i}].args must be an object")
-
-        if "tool" in step and isinstance(step["tool"], dict):
-            tool_obj = step["tool"]
-            if "args" in tool_obj and not isinstance(tool_obj["args"], dict):
-                raise ValueError(f"steps[{i}].tool.args must be an object")
+    Keep this wrapper to minimize runner churn while centralizing
+    plan contract rules in app.agents.plan_validator.
+    """
+    errors = validate_plan_payload(payload)
+    if errors:
+        raise ValueError("plan contract validation failed: " + "; ".join(errors))
 
 
 def run_agent_once_raw(
@@ -166,39 +110,4 @@ def run_agent_once_json(
 
     validate_payload(payload)
     payload = execute_plan(payload)
-    #finalize_output 先不调用这个函数
-    
-    def finalize_output(payload: dict, debug: bool) -> dict:
-        """
-        Decide what to return to the caller.
-
-        - debug=True: always return full payload
-        - debug=False:
-            - if any step failed -> return full payload
-            - if all steps succeeded -> return last tool output
-        """
-        if debug:
-            return payload
-
-        results = payload.get("execution_results")
-
-        if not results or not isinstance(results, list):
-            return payload
-
-        # 如果有任何一步失败，返回完整 payload（便于看 error）
-        for r in results:
-            if not r.get("ok", True):
-                return payload
-
-        last = results[-1]
-        if not isinstance(last, dict):
-            return payload
-
-        out = last.get("output")
-        if isinstance(out, dict):
-            return out
-
-        return payload
-
-# Always return full payload to keep output contract stable.
     return payload
