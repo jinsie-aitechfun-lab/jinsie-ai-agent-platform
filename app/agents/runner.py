@@ -19,16 +19,15 @@ def load_text(path: str) -> str:
 
 def validate_payload(payload: dict) -> None:
     """
-    Validate payload against the single source of truth:
-    app.agents.plan_validator.validate_plan_payload
+    Validate plan payload via the canonical validator.
 
-    This runner keeps validate_payload() as a thin wrapper to avoid
-    duplicating schema rules here.
+    Keep this wrapper to minimize runner churn while centralizing
+    plan contract rules in app.agents.plan_validator.
     """
     errors = validate_plan_payload(payload)
     if errors:
-        joined = "\n".join(f"- {e}" for e in errors)
-        raise ValueError(f"plan contract validation failed:\n{joined}")
+        raise ValueError("plan contract validation failed: " + "; ".join(errors))
+
 
 def run_agent_once_raw(
     user_input: str,
@@ -111,39 +110,4 @@ def run_agent_once_json(
 
     validate_payload(payload)
     payload = execute_plan(payload)
-    #finalize_output 先不调用这个函数
-    
-    def finalize_output(payload: dict, debug: bool) -> dict:
-        """
-        Decide what to return to the caller.
-
-        - debug=True: always return full payload
-        - debug=False:
-            - if any step failed -> return full payload
-            - if all steps succeeded -> return last tool output
-        """
-        if debug:
-            return payload
-
-        results = payload.get("execution_results")
-
-        if not results or not isinstance(results, list):
-            return payload
-
-        # 如果有任何一步失败，返回完整 payload（便于看 error）
-        for r in results:
-            if not r.get("ok", True):
-                return payload
-
-        last = results[-1]
-        if not isinstance(last, dict):
-            return payload
-
-        out = last.get("output")
-        if isinstance(out, dict):
-            return out
-
-        return payload
-
-# Always return full payload to keep output contract stable.
     return payload
