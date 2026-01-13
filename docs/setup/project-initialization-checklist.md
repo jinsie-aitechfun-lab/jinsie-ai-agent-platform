@@ -1,7 +1,7 @@
 # Project Initialization Checklist（Engineering Baseline）
 
 > 本文档为工程化项目初始化检查表，用于确保系统基础设施、目录结构、最小可运行脚本、API 通路及工程流程全部准备就绪。  
-> 文档不包含任何学习天数或时间信息，可公开放置在 `docs/learning/project-initialization-checklist.md`。
+> 文档不包含任何学习天数或时间信息，可公开放置在 `docs/setup/project-initialization-checklist.md`。
 
 ---
 

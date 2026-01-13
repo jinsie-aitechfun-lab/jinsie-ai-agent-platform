@@ -88,7 +88,7 @@ System Prompt 只负责：
 ## 五、适用场景
 
 - AI 任务规划器（Task Planner）
-- 学习 / 项目 / 执行计划生成
+- 任务 / 项目 / 执行计划生成
 - 复杂任务的结构化拆解
 - Agent 系统中的中枢调度 Prompt
 
