@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from app.services.chat_completion_service import ChatCompletionService
+from app.agents.plan_validator import validate_plan_payload
+
 
 
 def load_text(path: str) -> str:
@@ -16,74 +18,17 @@ def load_text(path: str) -> str:
 
 
 def validate_payload(payload: dict) -> None:
-    # ---- top-level checks ----
-    required_top = ["task_summary", "steps", "assumptions", "risks"]
-    for k in required_top:
-        if k not in payload:
-            raise ValueError(f"missing top-level field: {k}")
+    """
+    Validate payload against the single source of truth:
+    app.agents.plan_validator.validate_plan_payload
 
-    if not isinstance(payload["task_summary"], str) or not payload["task_summary"].strip():
-        raise ValueError("task_summary must be a non-empty string")
-
-    if not isinstance(payload["steps"], list) or len(payload["steps"]) == 0:
-        raise ValueError("steps must be a non-empty array")
-
-    if not isinstance(payload["assumptions"], list) or not all(isinstance(x, str) for x in payload["assumptions"]):
-        raise ValueError("assumptions must be an array of strings")
-
-    if not isinstance(payload["risks"], list) or not all(isinstance(x, str) for x in payload["risks"]):
-        raise ValueError("risks must be an array of strings")
-
-    # ---- steps schema checks (plan schema v1) ----
-    required_step_fields = [
-        "step_id",
-        "title",
-        "description",
-        "dependencies",
-        "deliverable",
-        "acceptance",
-    ]
-
-    seen_ids = set()
-    for i, step in enumerate(payload["steps"]):
-        if not isinstance(step, dict):
-            raise ValueError(f"steps[{i}] must be an object")
-
-        for k in required_step_fields:
-            if k not in step:
-                raise ValueError(f"steps[{i}] missing field: {k}")
-
-        if not isinstance(step["step_id"], str) or not step["step_id"].strip():
-            raise ValueError(f"steps[{i}].step_id must be a non-empty string")
-
-        if step["step_id"] in seen_ids:
-            raise ValueError(f"duplicate step_id: {step['step_id']}")
-        seen_ids.add(step["step_id"])
-
-        for k in ["title", "description", "deliverable", "acceptance"]:
-            if not isinstance(step[k], str) or not step[k].strip():
-                raise ValueError(f"steps[{i}].{k} must be a non-empty string")
-
-        if not isinstance(step["dependencies"], list) or not all(isinstance(x, str) for x in step["dependencies"]):
-            raise ValueError(f"steps[{i}].dependencies must be an array of strings")
-        
-        # tool can be:
-        # 1) "echo_tool"
-        # 2) {"name": "echo_tool", "args": {...}}
-        if "tool" in step:
-            tool = step["tool"]
-            if not (isinstance(tool, str) or isinstance(tool, dict)):
-                raise ValueError(f"steps[{i}].tool must be a string or an object")
-
-        # args can exist either at step-level (when tool is string) or inside tool object
-        if "args" in step and not isinstance(step["args"], dict):
-            raise ValueError(f"steps[{i}].args must be an object")
-
-        if "tool" in step and isinstance(step["tool"], dict):
-            tool_obj = step["tool"]
-            if "args" in tool_obj and not isinstance(tool_obj["args"], dict):
-                raise ValueError(f"steps[{i}].tool.args must be an object")
-
+    This runner keeps validate_payload() as a thin wrapper to avoid
+    duplicating schema rules here.
+    """
+    errors = validate_plan_payload(payload)
+    if errors:
+        joined = "\n".join(f"- {e}" for e in errors)
+        raise ValueError(f"plan contract validation failed:\n{joined}")
 
 def run_agent_once_raw(
     user_input: str,
