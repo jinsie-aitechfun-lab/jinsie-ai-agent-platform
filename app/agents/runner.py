@@ -29,6 +29,62 @@ def validate_payload(payload: dict) -> None:
         raise ValueError("plan contract validation failed: " + "; ".join(errors))
 
 
+def finalize_output(payload: Dict[str, Any], debug: bool) -> Dict[str, Any]:
+    """
+    Decide what to return to the caller.
+
+    - debug=True: always return full payload
+    - debug=False:
+        - if task failed/blocked -> return full payload (keep errors visible)
+        - if task succeeded -> return a stable summary
+    """
+    if debug:
+        return payload
+
+    results = payload.get("execution_results")
+    if not isinstance(results, list) or not results:
+        return payload
+
+    # Find __meta__ row if present
+    meta = None
+    for r in results:
+        if isinstance(r, dict) and r.get("step_id") == "__meta__":
+            meta = r
+            break
+
+    task_status = None
+    if isinstance(meta, dict):
+        task_status = meta.get("task_status")
+
+    # If task is not OK, return full payload for visibility
+    if task_status in ("FAILED", "BLOCKED"):
+        return payload
+
+    # Otherwise: return a stable summary (still JSON-safe)
+    # Prefer the last non-meta step as output source
+    last_step = None
+    for r in reversed(results):
+        if isinstance(r, dict) and r.get("step_id") != "__meta__":
+            last_step = r
+            break
+
+    summary: Dict[str, Any] = {
+        "task_status": task_status or "OK",
+    }
+
+    if isinstance(meta, dict):
+        stats = meta.get("stats")
+        if isinstance(stats, dict):
+            summary["stats"] = stats
+
+    if isinstance(last_step, dict):
+        summary["last_step_id"] = last_step.get("step_id")
+        summary["tool"] = last_step.get("tool")
+        if "output" in last_step:
+            summary["output"] = last_step.get("output")
+
+    return summary
+
 def run_agent_once_raw(
     user_input: str,
     *,
@@ -110,4 +166,4 @@ def run_agent_once_json(
 
     validate_payload(payload)
     payload = execute_plan(payload)
-    return payload
+    return finalize_output(payload, debug)
