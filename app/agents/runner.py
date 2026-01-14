@@ -1,4 +1,7 @@
 from __future__ import annotations
+# Module: agent_orchestration
+# Boundary: do NOT import app.tools/* (tool dispatch is execution_engine/tool_runtime responsibility)
+# See: docs/architecture/modules.md
 from app.agents.plan_executor import execute_plan
 
 import json

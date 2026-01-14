@@ -1,4 +1,7 @@
 from __future__ import annotations
+# Module: execution_engine
+# Boundary: do NOT import runner/entry_shell; do NOT own contract rules (keep those in plan_validator/prompt)
+# See: docs/architecture/modules.md
 
 from typing import Any, Optional
 

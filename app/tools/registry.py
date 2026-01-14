@@ -1,5 +1,7 @@
 from __future__ import annotations
-
+# Module: tool_runtime
+# Boundary: do NOT import app.agents/* (tools must be reusable and execution-agnostic)
+# See: docs/architecture/modules.md
 from typing import Any, Dict, List
 
 from app.tools.base import ToolSpec
