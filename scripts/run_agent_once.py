@@ -1,4 +1,7 @@
 from __future__ import annotations
+# Module: entry_shell
+# Boundary: do NOT import app.tools/* or app.agents.plan_executor/plan_validator directly
+# See: docs/architecture/modules.md
 
 import argparse
 import json
