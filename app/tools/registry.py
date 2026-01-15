@@ -45,6 +45,24 @@ def list_tools() -> List[Dict[str, Any]]:
 
     return out
 
+def list_tool_names() -> List[str]:
+    """
+    Export canonical tool names for contract validation.
+
+    Rules:
+    - Only include canonical "main name" entries (key == tool.name)
+    - Exclude compatibility alias keys (e.g. time_tool/get_time_tool)
+    - Return a sorted list for stable tests
+    """
+    names: set[str] = set()
+
+    for key, t in _TOOL_REGISTRY.items():
+        if key != t.name:
+            continue
+        if t.name:
+            names.add(t.name)
+
+    return sorted(names)
 
 def dispatch_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
     tool = get_tool(name)

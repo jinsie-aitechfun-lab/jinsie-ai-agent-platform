@@ -5,6 +5,8 @@ from typing import Any, Dict, Literal, Tuple
 
 from app.agents.plan_executor import execute_plan
 from app.agents.plan_validator import validate_execution_results, validate_plan_payload
+from app.tools.registry import list_tool_names
+
 
 from pathlib import Path
 import subprocess
@@ -61,6 +63,9 @@ def main() -> int:
     gen = Path("scripts/generate_samples.py")
     if gen.exists():
         subprocess.run([sys.executable, str(gen)], check=True)
+    # The contract-level known tools for validation in this script.
+    # Keep it in sync with the actual tool registry to avoid drift.
+    KNOWN_TOOLS: set[str] = set(list_tool_names())
 
     # (case_name, payload, expected_task_status, plan_policy)
     cases: list[Tuple[str, Dict[str, Any], Expectation, PlanPolicy]] = []
@@ -84,19 +89,39 @@ def main() -> int:
             "REQUIRE_VALID",
         )
     )
-
-    # Case 1: unknown tool -> executor marks step failed; downstream skipped -> FAILED
+    # Case 1: unknown tool -> REJECT at contract layer (optimal fail-fast)
     cases.append(
         (
-            "unknown_tool_should_fail",
+            "unknown_tool_should_reject_at_contract",
             _base_payload(
-                "unknown tool should fail (not blocked)",
+                "unknown tool should be rejected by plan contract",
                 steps=[
                     _base_step(
                         "step_1",
                         title="try unknown tool",
                         dependencies=[],
-                        tool_name="no_such_tool",  # intentionally not in registry
+                        tool_name="no_such_tool",
+                    )
+                ],
+            ),
+            "REJECT",
+            "REQUIRE_VALID",
+        )
+    )
+
+    # Case 2: unknown tool -> executor marks step failed; downstream skipped -> FAILED
+    # We *intentionally* allow plan errors for this case to verify executor behavior.
+    cases.append(
+        (
+            "unknown_tool_should_fail_when_allow_errors",
+            _base_payload(
+                "unknown tool should fail in executor when bypassing plan contract",
+                steps=[
+                    _base_step(
+                        "step_1",
+                        title="try unknown tool",
+                        dependencies=[],
+                        tool_name="no_such_tool",  # intentionally not in KNOWN_TOOLS
                     ),
                     _base_step(
                         "step_2",
@@ -107,11 +132,12 @@ def main() -> int:
                 ],
             ),
             "FAILED",
-            "REQUIRE_VALID",
+            "ALLOW_ERRORS",
         )
     )
 
-    # Case 2: unknown dependency -> contract flags; executor fail-fast -> BLOCKED
+
+    # Case 3: unknown dependency -> contract flags; executor fail-fast -> BLOCKED
     # We *intentionally* allow plan errors for this case to verify executor behavior.
     cases.append(
         (
@@ -135,7 +161,13 @@ def main() -> int:
     for name, payload, expected, plan_policy in cases:
         _print(f"[{name}] payload", payload)
 
-        plan_errors = validate_plan_payload(payload, strict_tool_object=True, strict_dep_order=True)
+        plan_errors = validate_plan_payload(
+            payload,
+            strict_tool_object=True,
+            strict_dep_order=True,
+            known_tools=KNOWN_TOOLS,
+        )
+
         _print(f"[{name}] payload validation errors", plan_errors)
 
         if expected == "REJECT":

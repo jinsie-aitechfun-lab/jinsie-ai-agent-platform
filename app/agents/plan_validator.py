@@ -8,6 +8,7 @@ def validate_plan_payload(
     *,
     strict_tool_object: bool = True,
     strict_dep_order: bool = True,
+    known_tools: set[str] | None = None,
 ) -> list[str]:
     """
     Plan payload contract validation.
@@ -128,15 +129,21 @@ def validate_plan_payload(
                 else:
                     if not tool.strip():
                         errors.append(f"steps[{i}].tool must be a non-empty string")
+                    else:
+                        if known_tools is not None and tool.strip() not in known_tools:
+                            errors.append(f"steps[{i}] has unknown tool: {tool.strip()}")
+                            
                     args = s.get("args")
                     if args is not None and not isinstance(args, dict):
                         errors.append(f"steps[{i}].args must be an object when provided")
-
             elif isinstance(tool, dict):
                 name = tool.get("name")
                 args = tool.get("args", {})
                 if not isinstance(name, str) or not name.strip():
                     errors.append(f"steps[{i}].tool.name must be a non-empty string")
+                else:
+                    if known_tools is not None and name.strip() not in known_tools:
+                        errors.append(f"steps[{i}] has unknown tool: {name.strip()}")
                 if args is None:
                     args = {}
                 if not isinstance(args, dict):
