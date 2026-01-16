@@ -23,8 +23,11 @@ def main() -> None:
     parser.add_argument("--input-file", help="Path to a text file containing the user query")
     parser.add_argument("--output-file", help="Save JSON output to a file (e.g., docs/samples/agent_output.json)")
     parser.add_argument("--debug", action="store_true", help="Print full payload including steps and execution_results")
+    # ✅ PCL schema toggle (default: enabled)
+    parser.add_argument("--no-schema", action="store_true", help="Disable PCL schema addendum injection")
+    # ✅ Minimal B hook: strict expected step count (default: off)
+    parser.add_argument("--expected-steps", type=int, default=None, help="Require exactly N steps (e.g., 3). Default: off.")
     args = parser.parse_args()
-
 
     if args.input_file:
         user_input = load_text(args.input_file).strip()
@@ -39,6 +42,8 @@ def main() -> None:
         prompt_path="app/prompts/system/agent_system.md",
         temperature=0.2,
         debug=args.debug,
+        schema_enabled=not args.no_schema,
+        expected_steps=args.expected_steps,
     )
 
     pretty = json.dumps(payload, ensure_ascii=False, indent=2)
