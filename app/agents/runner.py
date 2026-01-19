@@ -193,6 +193,61 @@ def _parse_json_best_effort(raw: str) -> Dict[str, Any]:
         raise last_err
     raise json.JSONDecodeError("No JSON object found in model output", text, 0)
 
+def _normalize_step_ids_inplace(payload: Dict[str, Any]) -> None:
+    """
+    Hard-fix for step_id drift:
+    - step_id MUST be step_1..step_N (continuous) in current order.
+    - dependencies MUST be rewritten accordingly.
+
+    This makes the pipeline robust even if REPAIR MODE still outputs step_2..step_N.
+    """
+    steps = payload.get("steps")
+    if not isinstance(steps, list) or not steps:
+        return
+
+    # Collect old ids (may be missing/invalid)
+    old_ids: List[Optional[str]] = []
+    for s in steps:
+        if isinstance(s, dict):
+            sid = s.get("step_id")
+            old_ids.append(sid if isinstance(sid, str) and sid.strip() else None)
+        else:
+            old_ids.append(None)
+
+    # If already normalized, do nothing
+    already = True
+    for idx, sid in enumerate(old_ids, start=1):
+        if sid != f"step_{idx}":
+            already = False
+            break
+    if already:
+        return
+
+    # Build old->new mapping based on current order
+    mapping: Dict[str, str] = {}
+    for idx, sid in enumerate(old_ids, start=1):
+        if sid:
+            mapping[sid] = f"step_{idx}"
+
+    # Apply new step_ids + rewrite dependencies
+    for idx, s in enumerate(steps, start=1):
+        if not isinstance(s, dict):
+            continue
+
+        new_id = f"step_{idx}"
+        s["step_id"] = new_id
+
+        deps = s.get("dependencies")
+        if isinstance(deps, list):
+            new_deps: List[Any] = []
+            for d in deps:
+                if isinstance(d, str) and d in mapping:
+                    new_deps.append(mapping[d])
+                else:
+                    new_deps.append(d)
+            s["dependencies"] = new_deps
+
+    payload["steps"] = steps
 
 def _enforce_expected_steps(payload: Dict[str, Any], expected_steps: Optional[int]) -> None:
     """
@@ -318,6 +373,91 @@ def _build_repair_messages(
     return messages
 
 
+def _get_task_status_from_execution_results(payload: Dict[str, Any]) -> Optional[str]:
+    """
+    Extract task_status from execution_results.__meta__ if present.
+    Returns: "COMPLETED"/"FAILED"/"BLOCKED"/"PARTIAL"/None
+    """
+    results = payload.get("execution_results")
+    if not isinstance(results, list):
+        return None
+    for r in results:
+        if isinstance(r, dict) and r.get("step_id") == "__meta__":
+            v = r.get("task_status")
+            return v if isinstance(v, str) else None
+    return None
+
+
+def _build_replan_messages(
+    *,
+    base_system_prompt: str,
+    schema_addendum: str,
+    user_input: str,
+    last_payload: Dict[str, Any],
+    expected_steps: Optional[int] = None,
+) -> List[Dict[str, str]]:
+    """
+    Replan mode (Execution Loop):
+    - When tool execution FAILED/BLOCKED, ask the model to produce a corrected plan JSON.
+    - Must keep plan contract.
+    - Must avoid unknown tools; prefer known stable tools by name:
+      - echo_tool
+      - time_tool / get_time_tool (compat)
+    - MUST output JSON only, no extra text.
+    """
+    expected_steps_rule = ""
+    if expected_steps is not None:
+        expected_steps_rule = f"""
+    Expected step count (MUST):
+    - Output EXACTLY {expected_steps} steps.
+    - step_ids MUST be step_1..step_{expected_steps}.
+        """.strip()
+
+    replan_system = f"""
+    You are in REPLAN MODE.
+
+    Context:
+    - The previous plan was executed, but it FAILED or was BLOCKED.
+    - You MUST generate a new corrected plan that can execute successfully.
+
+    Hard rules:
+    1) Output MUST be a SINGLE valid JSON object. No extra text. No Markdown.
+    2) Top-level fields MUST exist: task_summary (string), assumptions (string[]), risks (string[]), steps (array of objects).
+    3) Each step MUST include: step_id, title, description, dependencies, deliverable, acceptance, tool.
+    4) step_id MUST start from "step_1" and be continuous with no gaps: step_1..step_N.
+    5) dependencies MUST only reference earlier step_ids.
+    6) Tool rule (MUST):
+       - Use ONLY these tool names:
+         - echo_tool
+         - time_tool
+         - get_time_tool
+       - If the previous plan used an unknown tool, replace it with echo_tool.
+    7) If the task was BLOCKED due to dependencies, fix dependencies so they reference valid earlier steps.
+    8) Keep the user intent. Do not add unrelated steps.
+    9) String safety:
+       - Do NOT embed raw JSON snippets or braces inside string fields.
+    {expected_steps_rule}
+    """.strip()
+
+    user_replan = f"""
+    User intent:
+    {user_input.strip()}
+
+    Previous payload (including execution_results):
+    {json.dumps(last_payload, ensure_ascii=False, indent=2)}
+
+    Task:
+    Return a corrected JSON plan only.
+    """.strip()
+
+    messages: List[Dict[str, str]] = [{"role": "system", "content": base_system_prompt}]
+    if schema_addendum:
+        messages.append({"role": "system", "content": schema_addendum})
+    messages.append({"role": "system", "content": replan_system})
+    messages.append({"role": "user", "content": user_replan})
+    return messages
+
+
 def run_agent_once_raw(
     user_input: str,
     *,
@@ -386,6 +526,7 @@ def run_agent_once_json(
     # Parse attempt #1; if JSON invalid -> repair once
     try:
         payload1 = _parse_json_best_effort(raw1)
+        _normalize_step_ids_inplace(payload1)
     except json.JSONDecodeError as e:
         _save_debug_raw("last_agent_raw_attempt1.txt", raw1)
 
@@ -406,6 +547,7 @@ def run_agent_once_json(
 
         try:
             payload2 = _parse_json_best_effort(raw2)
+            _normalize_step_ids_inplace(payload2)
         except json.JSONDecodeError as e2:
             preview = (raw2 or "")[:200].replace("\n", "\\n")
             raise ValueError(
@@ -418,6 +560,33 @@ def run_agent_once_json(
         _enforce_expected_steps(payload2, expected_steps)
 
         payload2 = execute_plan(payload2)
+
+        # ✅ execution loop (replan once on FAILED/BLOCKED)
+        status2 = _get_task_status_from_execution_results(payload2)
+        if status2 in ("FAILED", "BLOCKED"):
+            replan_messages = _build_replan_messages(
+                base_system_prompt=base_system_prompt,
+                schema_addendum=schema_addendum,
+                user_input=user_input,
+                last_payload=payload2,
+                expected_steps=expected_steps,
+            )
+            raw3 = _call_model(
+                replan_messages,
+                temperature=0.0,
+                max_tokens=max_tokens,
+                service=service,
+            )
+            _save_debug_raw("last_agent_raw_replan_attempt3.txt", raw3)
+
+            payload3 = _parse_json_best_effort(raw3)
+            _normalize_step_ids_inplace(payload3)
+            validate_payload(payload3)
+            _enforce_expected_steps(payload3, expected_steps)
+
+            payload3 = execute_plan(payload3)
+            return finalize_output(payload3, debug)
+
         return finalize_output(payload2, debug)
 
     # Validate attempt #1; if step_id contract fails -> repair once
@@ -444,10 +613,39 @@ def run_agent_once_json(
             _save_debug_raw("last_agent_raw_attempt2.txt", raw2)
 
             payload2 = _parse_json_best_effort(raw2)
+            _normalize_step_ids_inplace(payload2)
             validate_payload(payload2)
             _enforce_expected_steps(payload2, expected_steps)
 
             payload2 = execute_plan(payload2)
+
+            # ✅ execution loop (replan once on FAILED/BLOCKED)
+            status2 = _get_task_status_from_execution_results(payload2)
+            if status2 in ("FAILED", "BLOCKED"):
+                replan_messages = _build_replan_messages(
+                    base_system_prompt=base_system_prompt,
+                    schema_addendum=schema_addendum,
+                    user_input=user_input,
+                    last_payload=payload2,
+                    expected_steps=expected_steps,
+                )
+                raw3 = _call_model(
+                    replan_messages,
+                    temperature=0.0,
+                    max_tokens=max_tokens,
+                    service=service,
+                )
+                _save_debug_raw("last_agent_raw_replan_attempt3.txt", raw3)
+
+                payload3 = _parse_json_best_effort(raw3)
+                _normalize_step_ids_inplace(payload3)
+
+                validate_payload(payload3)
+                _enforce_expected_steps(payload3, expected_steps)
+
+                payload3 = execute_plan(payload3)
+                return finalize_output(payload3, debug)
+
             return finalize_output(payload2, debug)
 
         # Other validation errors: raise as-is
@@ -455,4 +653,31 @@ def run_agent_once_json(
 
     # attempt #1 ok -> execute
     payload1 = execute_plan(payload1)
+
+    # ✅ execution loop (replan once on FAILED/BLOCKED)
+    status1 = _get_task_status_from_execution_results(payload1)
+    if status1 in ("FAILED", "BLOCKED"):
+        replan_messages = _build_replan_messages(
+            base_system_prompt=base_system_prompt,
+            schema_addendum=schema_addendum,
+            user_input=user_input,
+            last_payload=payload1,
+            expected_steps=expected_steps,
+        )
+        raw2 = _call_model(
+            replan_messages,
+            temperature=0.0,
+            max_tokens=max_tokens,
+            service=service,
+        )
+        _save_debug_raw("last_agent_raw_replan_attempt2.txt", raw2)
+
+        payload2 = _parse_json_best_effort(raw2)
+        _normalize_step_ids_inplace(payload2)
+        validate_payload(payload2)
+        _enforce_expected_steps(payload2, expected_steps)
+
+        payload2 = execute_plan(payload2)
+        return finalize_output(payload2, debug)
+
     return finalize_output(payload1, debug)
