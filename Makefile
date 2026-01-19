@@ -3,16 +3,17 @@ VENV_DIR := .venv
 VENV_PY  := $(VENV_DIR)/bin/python
 
 # 默认命令
-.PHONY: help venv install env-check run test clean
+.PHONY: help venv install env-check run test clean runner-contract
 
 help:
 	@echo "可用命令："
-	@echo "  make venv       创建虚拟环境 (.venv)"
-	@echo "  make install    在虚拟环境中安装依赖 (requirements.txt)"
-	@echo "  make env-check  运行环境自检脚本 env_check.py"
-	@echo "  make run        运行主程序 main.py"
-	@echo "  make test       运行测试（如 pytest）"
-	@echo "  make clean      删除虚拟环境和临时文件"
+	@echo "  make venv            创建虚拟环境 (.venv)"
+	@echo "  make install         在虚拟环境中安装依赖 (requirements.txt / requirements-dev.txt)"
+	@echo "  make env-check       运行环境自检脚本 scripts/env_check.py（使用 .venv）"
+	@echo "  make run             运行主程序 main.py"
+	@echo "  make test            运行测试（如 pytest）"
+	@echo "  make runner-contract 运行 Runner Contract Gate（本地契约校验入口，对齐 CI）"
+	@echo "  make clean           删除虚拟环境和临时文件"
 
 # 创建虚拟环境
 venv:
@@ -29,12 +30,31 @@ install: venv
 	else \
 		echo "WARNING: 未找到 requirements.txt，跳过依赖安装"; \
 	fi
+	@if [ -f requirements-dev.txt ]; then \
+		$(VENV_PY) -m pip install -r requirements-dev.txt; \
+	else \
+		echo "INFO: 未找到 requirements-dev.txt，跳过 dev 依赖安装"; \
+	fi
 	@echo ">>> 依赖安装完成。"
 
-# 运行环境自检脚本
-env-check:
-	@echo ">>> 运行环境检查脚本 env_check.py..."
-	python scripts/env_check.py
+# 运行环境自检脚本（统一用 .venv，避免系统 python 混用）
+env-check: install
+	@echo ">>> 运行环境检查脚本 scripts/env_check.py..."
+	$(VENV_PY) scripts/env_check.py
+
+# Runner Contract Gate：本地统一入口（对齐 CI）
+runner-contract: install
+	@echo ">>> Runner Contract Gate: compile + semantics + samples + clean tree"
+	$(VENV_PY) -m py_compile app/agents/plan_executor.py
+	$(VENV_PY) -m py_compile app/agents/plan_validator.py
+	$(VENV_PY) -m py_compile app/agents/runner.py
+	$(VENV_PY) -m py_compile scripts/verify_execution_semantics.py
+	$(VENV_PY) -m py_compile scripts/generate_samples.py
+	PYTHONPATH=. $(VENV_PY) scripts/verify_execution_semantics.py | tail -n 3
+	PYTHONPATH=. $(VENV_PY) scripts/verify_execution_semantics.py
+	PYTHONPATH=. $(VENV_PY) scripts/generate_samples.py
+	git diff --exit-code
+	@test -z "$$(git status --porcelain)"
 
 # 运行主程序
 run: install
