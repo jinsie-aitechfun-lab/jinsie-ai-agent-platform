@@ -22,7 +22,7 @@ def save_text(path: str, content: str) -> None:
 def _get_task_status(payload: Dict[str, Any]) -> Optional[str]:
     """
     Best-effort extract task_status from execution_results.__meta__.
-    Returns: "COMPLETED"/"FAILED"/"BLOCKED"/None
+    Returns: "COMPLETED"/"FAILED"/"BLOCKED"/"PARTIAL"/None
     """
     results = payload.get("execution_results")
     if not isinstance(results, list):
@@ -68,6 +68,10 @@ def _classify_exception(e: Exception) -> str:
     if "step_id sequence must be contiguous" in msg_low:
         return "validator_failed"
 
+    # strict-degraded related
+    if "strict degraded" in msg_low:
+        return "validator_failed"
+
     # infra / empty output
     if "model output is empty" in msg_low:
         return "empty_output"
@@ -91,6 +95,13 @@ def main() -> None:
         type=int,
         default=None,
         help="If provided, enforce/guide the model to output exactly N steps (best-effort).",
+    )
+
+    # ✅ Strict degraded mode (quality gate)
+    parser.add_argument(
+        "--strict-degraded",
+        action="store_true",
+        help="Treat degraded steps as BLOCKED and trigger a single replan (quality mode).",
     )
 
     # ✅ Repeat mode
@@ -140,6 +151,7 @@ def main() -> None:
             debug=args.debug,
             schema_enabled=not args.no_schema,
             expected_steps=args.expected_steps,  # type: ignore[arg-type]
+            strict_degraded=args.strict_degraded,
         )
 
         pretty = json.dumps(payload, ensure_ascii=False, indent=2)
@@ -159,6 +171,7 @@ def main() -> None:
         "execution_failed_runs": 0,
         "execution_blocked_runs": 0,
         "execution_completed_runs": 0,
+        "execution_partial_runs": 0,
         "rate_limited": 0,
         "parse_json_failed": 0,
         "repair_json_failed": 0,
@@ -181,6 +194,7 @@ def main() -> None:
                 debug=args.debug,
                 schema_enabled=not args.no_schema,
                 expected_steps=args.expected_steps,  # type: ignore[arg-type]
+                strict_degraded=args.strict_degraded,
             )
             last_payload = payload
             last_exception = None
@@ -197,6 +211,8 @@ def main() -> None:
                 stats["execution_failed_runs"] += 1
             elif task_status == "BLOCKED":
                 stats["execution_blocked_runs"] += 1
+            elif task_status == "PARTIAL":
+                stats["execution_partial_runs"] += 1
             else:
                 # No meta row: still count as success (no exception)
                 stats["success_runs"] += 1
@@ -235,6 +251,7 @@ def main() -> None:
     print(f"stopped_early: {stopped_early}")
     print(f"schema_enabled: {not args.no_schema}")
     print(f"expected_steps: {args.expected_steps}")
+    print(f"strict_degraded: {args.strict_degraded}")
     print(f"sleep_ms: {args.sleep_ms}")
     print(f"stop_on_rate_limit: {args.stop_on_rate_limit}")
     print("--------------------------------------------------------")
@@ -249,6 +266,7 @@ def main() -> None:
     print(f"  COMPLETED: {stats['execution_completed_runs']}")
     print(f"  FAILED:    {stats['execution_failed_runs']}")
     print(f"  BLOCKED:   {stats['execution_blocked_runs']}")
+    print(f"  PARTIAL:   {stats['execution_partial_runs']}")
     print("--------------------------------------------------------")
     print("exception_buckets:")
     print(f"  rate_limited:        {stats['rate_limited']}")

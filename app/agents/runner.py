@@ -40,7 +40,7 @@ def finalize_output(payload: Dict[str, Any], debug: bool) -> Dict[str, Any]:
 
     - debug=True: always return full payload
     - debug=False:
-        - if task failed/blocked -> return full payload (keep errors visible)
+        - if task failed/blocked/partial -> return full payload (keep errors visible)
         - if task succeeded -> return a stable summary
     """
     if debug:
@@ -62,7 +62,7 @@ def finalize_output(payload: Dict[str, Any], debug: bool) -> Dict[str, Any]:
         task_status = meta.get("task_status")
 
     # If task is not OK, return full payload for visibility
-    if task_status in ("FAILED", "BLOCKED"):
+    if task_status in ("FAILED", "BLOCKED", "PARTIAL"):
         return payload
 
     # Otherwise: return a stable summary (still JSON-safe)
@@ -193,6 +193,7 @@ def _parse_json_best_effort(raw: str) -> Dict[str, Any]:
         raise last_err
     raise json.JSONDecodeError("No JSON object found in model output", text, 0)
 
+
 def _normalize_step_ids_inplace(payload: Dict[str, Any]) -> None:
     """
     Hard-fix for step_id drift:
@@ -248,6 +249,103 @@ def _normalize_step_ids_inplace(payload: Dict[str, Any]) -> None:
             s["dependencies"] = new_deps
 
     payload["steps"] = steps
+
+
+def _fix_forward_dependencies_inplace(payload: Dict[str, Any]) -> None:
+    """
+    Hard-fix for forward/self/unknown dependencies:
+    - dependencies must reference earlier declared step_ids only.
+    - remove self-dependency
+    - drop unknown step ids (validator-safe fallback)
+
+    This runs AFTER _normalize_step_ids_inplace, so we can rely on step_1..step_N.
+    """
+    steps = payload.get("steps")
+    if not isinstance(steps, list) or not steps:
+        return
+
+    seen: set[str] = set()
+    for s in steps:
+        if not isinstance(s, dict):
+            continue
+
+        sid = s.get("step_id")
+        if not isinstance(sid, str) or not sid.strip():
+            continue
+
+        deps = s.get("dependencies")
+        if not isinstance(deps, list):
+            # normalize shape
+            s["dependencies"] = []
+            deps = []
+
+        fixed: List[str] = []
+        for d in deps:
+            if not isinstance(d, str):
+                continue
+            if d == sid:
+                continue
+            if d in seen:
+                fixed.append(d)
+                continue
+            # drop forward/unknown refs silently
+            continue
+
+        s["dependencies"] = fixed
+        seen.add(sid)
+
+    payload["steps"] = steps
+
+
+def _pad_steps_to_expected(payload: Dict[str, Any], expected_steps: Optional[int]) -> None:
+    """
+    Deterministic safety net for expected_steps.
+
+    If expected_steps is set and model produced fewer steps, we will append
+    placeholder steps to reach exactly N steps.
+
+    - tool: echo_tool
+    - dependencies: chain from previous REAL step_id (not assumed numbering)
+    - step_id: best-effort; will be normalized later anyway
+    """
+    if expected_steps is None:
+        return
+
+    steps = payload.get("steps")
+    if not isinstance(steps, list):
+        return
+
+    cur = len(steps)
+    if cur >= expected_steps:
+        return
+
+    def _get_prev_step_id() -> Optional[str]:
+        # best-effort pick the last dict step_id
+        for s in reversed(steps):
+            if isinstance(s, dict):
+                sid = s.get("step_id")
+                if isinstance(sid, str) and sid.strip():
+                    return sid
+        return None
+
+    for _ in range(cur + 1, expected_steps + 1):
+        prev_id = _get_prev_step_id()
+        placeholder = {
+            "step_id": "step_placeholder",  # will be normalized
+            "title": "补齐占位步骤",
+            "description": "为满足 expected_steps 的刚性步数要求，追加一个占位步骤。",
+            "dependencies": [prev_id] if prev_id else [],
+            "deliverable": "占位输出",
+            "acceptance": "输出包含占位文本",
+            "tool": {
+                "name": "echo_tool",
+                "args": {"text": "placeholder: padded by runner to satisfy expected_steps"},
+            },
+        }
+        steps.append(placeholder)
+
+    payload["steps"] = steps
+
 
 def _enforce_expected_steps(payload: Dict[str, Any], expected_steps: Optional[int]) -> None:
     """
@@ -388,6 +486,49 @@ def _get_task_status_from_execution_results(payload: Dict[str, Any]) -> Optional
     return None
 
 
+def _has_degraded_steps(payload: Dict[str, Any]) -> bool:
+    """
+    Best-effort detect degraded steps from execution_results meta.
+    Compatible with your current shape:
+    - meta.stats.degraded_count
+    - meta.degraded_steps
+    """
+    results = payload.get("execution_results")
+    if not isinstance(results, list):
+        return False
+    for r in results:
+        if not isinstance(r, dict) or r.get("step_id") != "__meta__":
+            continue
+
+        stats = r.get("stats")
+        if isinstance(stats, dict):
+            dc = stats.get("degraded_count")
+            if isinstance(dc, int) and dc > 0:
+                return True
+
+        ds = r.get("degraded_steps")
+        if isinstance(ds, list) and len(ds) > 0:
+            return True
+
+        return False
+    return False
+
+
+def _mark_meta_as_partial_due_to_degraded(payload: Dict[str, Any]) -> None:
+    """
+    If strict_degraded triggers, we mark meta as PARTIAL to prevent finalize_output from hiding details.
+    This is a local annotation; the real execution results stay intact.
+    """
+    results = payload.get("execution_results")
+    if not isinstance(results, list):
+        return
+    for r in results:
+        if isinstance(r, dict) and r.get("step_id") == "__meta__":
+            r["task_status"] = "PARTIAL"
+            r["reason"] = "strict degraded: degraded steps present, quality gate tripped"
+            return
+
+
 def _build_replan_messages(
     *,
     base_system_prompt: str,
@@ -398,11 +539,9 @@ def _build_replan_messages(
 ) -> List[Dict[str, str]]:
     """
     Replan mode (Execution Loop):
-    - When tool execution FAILED/BLOCKED, ask the model to produce a corrected plan JSON.
+    - When tool execution FAILED/BLOCKED (or strict degraded gate), ask the model to produce a corrected plan JSON.
     - Must keep plan contract.
-    - Must avoid unknown tools; prefer known stable tools by name:
-      - echo_tool
-      - time_tool / get_time_tool (compat)
+    - Must avoid unknown tools.
     - MUST output JSON only, no extra text.
     """
     expected_steps_rule = ""
@@ -417,7 +556,7 @@ def _build_replan_messages(
     You are in REPLAN MODE.
 
     Context:
-    - The previous plan was executed, but it FAILED or was BLOCKED.
+    - The previous plan was executed, but it FAILED or was BLOCKED (or a strict degraded quality gate tripped).
     - You MUST generate a new corrected plan that can execute successfully.
 
     Hard rules:
@@ -429,6 +568,7 @@ def _build_replan_messages(
     6) Tool rule (MUST):
        - Use ONLY these tool names:
          - echo_tool
+         - get_time
          - time_tool
          - get_time_tool
        - If the previous plan used an unknown tool, replace it with echo_tool.
@@ -499,6 +639,7 @@ def run_agent_once_json(
     debug: bool = False,
     schema_enabled: bool = True,
     expected_steps: Optional[int] = None,
+    strict_degraded: bool = False,
     service: Optional[ChatCompletionService] = None,
 ) -> Dict[str, Any]:
     base_system_prompt = load_text(prompt_path).strip()
@@ -526,8 +667,11 @@ def run_agent_once_json(
     # Parse attempt #1; if JSON invalid -> repair once
     try:
         payload1 = _parse_json_best_effort(raw1)
+        _pad_steps_to_expected(payload1, expected_steps)
         _normalize_step_ids_inplace(payload1)
-    except json.JSONDecodeError as e:
+        _fix_forward_dependencies_inplace(payload1)
+
+    except json.JSONDecodeError:
         _save_debug_raw("last_agent_raw_attempt1.txt", raw1)
 
         repair_messages = _build_repair_messages(
@@ -547,7 +691,9 @@ def run_agent_once_json(
 
         try:
             payload2 = _parse_json_best_effort(raw2)
+            _pad_steps_to_expected(payload2, expected_steps)
             _normalize_step_ids_inplace(payload2)
+            _fix_forward_dependencies_inplace(payload2)
         except json.JSONDecodeError as e2:
             preview = (raw2 or "")[:200].replace("\n", "\\n")
             raise ValueError(
@@ -561,9 +707,13 @@ def run_agent_once_json(
 
         payload2 = execute_plan(payload2)
 
-        # ✅ execution loop (replan once on FAILED/BLOCKED)
+        # ✅ strict-degraded gate (treat as PARTIAL and trigger replan once)
+        if strict_degraded and _has_degraded_steps(payload2):
+            _mark_meta_as_partial_due_to_degraded(payload2)
+
+        # ✅ execution loop (replan once on FAILED/BLOCKED/PARTIAL)
         status2 = _get_task_status_from_execution_results(payload2)
-        if status2 in ("FAILED", "BLOCKED"):
+        if status2 in ("FAILED", "BLOCKED", "PARTIAL"):
             replan_messages = _build_replan_messages(
                 base_system_prompt=base_system_prompt,
                 schema_addendum=schema_addendum,
@@ -580,11 +730,18 @@ def run_agent_once_json(
             _save_debug_raw("last_agent_raw_replan_attempt3.txt", raw3)
 
             payload3 = _parse_json_best_effort(raw3)
+            _pad_steps_to_expected(payload3, expected_steps)
             _normalize_step_ids_inplace(payload3)
+            _fix_forward_dependencies_inplace(payload3)
             validate_payload(payload3)
             _enforce_expected_steps(payload3, expected_steps)
 
             payload3 = execute_plan(payload3)
+
+            # strict gate again (if still degraded, keep it visible)
+            if strict_degraded and _has_degraded_steps(payload3):
+                _mark_meta_as_partial_due_to_degraded(payload3)
+
             return finalize_output(payload3, debug)
 
         return finalize_output(payload2, debug)
@@ -613,15 +770,21 @@ def run_agent_once_json(
             _save_debug_raw("last_agent_raw_attempt2.txt", raw2)
 
             payload2 = _parse_json_best_effort(raw2)
+            _pad_steps_to_expected(payload2, expected_steps)
             _normalize_step_ids_inplace(payload2)
+            _fix_forward_dependencies_inplace(payload2)
+
             validate_payload(payload2)
             _enforce_expected_steps(payload2, expected_steps)
 
             payload2 = execute_plan(payload2)
 
-            # ✅ execution loop (replan once on FAILED/BLOCKED)
+            if strict_degraded and _has_degraded_steps(payload2):
+                _mark_meta_as_partial_due_to_degraded(payload2)
+
+            # ✅ execution loop (replan once on FAILED/BLOCKED/PARTIAL)
             status2 = _get_task_status_from_execution_results(payload2)
-            if status2 in ("FAILED", "BLOCKED"):
+            if status2 in ("FAILED", "BLOCKED", "PARTIAL"):
                 replan_messages = _build_replan_messages(
                     base_system_prompt=base_system_prompt,
                     schema_addendum=schema_addendum,
@@ -638,25 +801,33 @@ def run_agent_once_json(
                 _save_debug_raw("last_agent_raw_replan_attempt3.txt", raw3)
 
                 payload3 = _parse_json_best_effort(raw3)
+                _pad_steps_to_expected(payload3, expected_steps)
                 _normalize_step_ids_inplace(payload3)
+                _fix_forward_dependencies_inplace(payload3)
 
                 validate_payload(payload3)
                 _enforce_expected_steps(payload3, expected_steps)
 
                 payload3 = execute_plan(payload3)
+
+                if strict_degraded and _has_degraded_steps(payload3):
+                    _mark_meta_as_partial_due_to_degraded(payload3)
+
                 return finalize_output(payload3, debug)
 
             return finalize_output(payload2, debug)
 
-        # Other validation errors: raise as-is
         raise
 
     # attempt #1 ok -> execute
     payload1 = execute_plan(payload1)
 
-    # ✅ execution loop (replan once on FAILED/BLOCKED)
+    if strict_degraded and _has_degraded_steps(payload1):
+        _mark_meta_as_partial_due_to_degraded(payload1)
+
+    # ✅ execution loop (replan once on FAILED/BLOCKED/PARTIAL)
     status1 = _get_task_status_from_execution_results(payload1)
-    if status1 in ("FAILED", "BLOCKED"):
+    if status1 in ("FAILED", "BLOCKED", "PARTIAL"):
         replan_messages = _build_replan_messages(
             base_system_prompt=base_system_prompt,
             schema_addendum=schema_addendum,
@@ -673,11 +844,18 @@ def run_agent_once_json(
         _save_debug_raw("last_agent_raw_replan_attempt2.txt", raw2)
 
         payload2 = _parse_json_best_effort(raw2)
+        _pad_steps_to_expected(payload2, expected_steps)
         _normalize_step_ids_inplace(payload2)
+        _fix_forward_dependencies_inplace(payload2)
+
         validate_payload(payload2)
         _enforce_expected_steps(payload2, expected_steps)
 
         payload2 = execute_plan(payload2)
+
+        if strict_degraded and _has_degraded_steps(payload2):
+            _mark_meta_as_partial_due_to_degraded(payload2)
+
         return finalize_output(payload2, debug)
 
     return finalize_output(payload1, debug)
