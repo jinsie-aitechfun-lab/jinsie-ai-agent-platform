@@ -51,8 +51,23 @@ class InputNode(BaseNode):
 class RetrievalNode(BaseNode):
     """
     检索节点：根据 query 获取候选文档
-    Skeleton 阶段：先返回占位 docs，保证数据结构固定
+
+    目标：
+    - 默认仍用 stub（保证不炸）
+    - 允许注入自定义 retriever（未来接 Milvus / OpenSearch / SearxNG）
+    - 节点只负责协议与边界，不负责“具体怎么检索”
     """
+
+    def __init__(self, name: str, retriever=None):
+        super().__init__(name=name)
+        self.retriever = retriever or self._stub_retriever
+
+    def _stub_retriever(self, query: str):
+        # 占位检索：先把 query 当作“命中内容”，让下游能跑通
+        return [
+            {"doc_id": "stub_1", "content": f"[stub doc] {query}"},
+            {"doc_id": "stub_2", "content": f"[stub doc2] {query}"},
+        ]
 
     def run(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -61,16 +76,15 @@ class RetrievalNode(BaseNode):
 
         输出协议：
         - {"query": str, "docs": list[dict]}
-          docs 每一项至少包含:
+        - docs 每一项至少包含:
             - "doc_id": str
             - "content": str
         """
         query = data.get("query", "")
-        # 占位检索：先把 query 当作“命中内容”，让下游能跑通
-        docs = [
-            {"doc_id": "stub_1", "content": f"[stub doc] {query}"},
-            {"doc_id": "stub_2", "content": f"[stub doc2] {query}"},
-        ]
+
+        # 变化点被隔离在 retriever：Node 只负责调用与保证输出结构
+        docs = self.retriever(query)
+
         return {
             "query": query,
             "docs": docs,

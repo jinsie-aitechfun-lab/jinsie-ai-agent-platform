@@ -47,7 +47,17 @@ def run_minimal_workflow(raw_input: str) -> Dict[str, Any]:
     raw_input -> InputNode -> RetrievalNode -> output dict
     """
     input_node = InputNode(name="input")
-    retrieval_node = RetrievalNode(name="retrieval")
+    # retrieval_node = RetrievalNode(name="retrieval")
+    def custom_retriever(query: str):
+        return [
+            {"doc_id": "custom_1", "content": f"[custom] {query}"},
+        ]
+
+    retrieval_node = RetrievalNode(name="retrieval", retriever=custom_retriever)
+
+    
+    
+    
     reasoning_node = ReasoningNode(name="reasoning")
     output_node = OutputNode(name="output")
     
