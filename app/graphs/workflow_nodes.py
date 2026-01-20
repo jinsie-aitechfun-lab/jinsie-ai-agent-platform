@@ -101,11 +101,21 @@ class ReasoningNode(BaseNode):
     """
     Workflow 的推理节点：做决策、规划、组合
 
-    Skeleton 阶段目标：
-    - 不做真实推理
-    - 不改 query / docs
-    - 只新增一个 reasoning 字段，证明“中间态”可以被插入工作流
+    目标：
+    - 默认仍用 stub reasoner（保证不炸）
+    - 允许注入自定义 reasoner（未来接真实 Planner / LLM 推理 / 规则引擎）
+    - Node 只负责协议与边界，不负责“具体怎么推理”
     """
+
+    def __init__(self, name: str, reasoner=None):
+        super().__init__(name=name)
+        self.reasoner = reasoner or self._stub_reasoner
+
+    def _stub_reasoner(self, query: str, docs):
+        return (
+            f"[stub reasoning] received query='{query}', docs_count={len(docs)}. "
+            "Next step would combine docs into an answer plan."
+        )
 
     def run(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -118,15 +128,11 @@ class ReasoningNode(BaseNode):
         query = data.get("query", "")
         docs = data.get("docs", [])
 
-        reasoning = (
-            f"[stub reasoning] received query='{query}', docs_count={len(docs)}. "
-            "Next step would combine docs into an answer plan."
-        )
+        # 变化点被隔离在 reasoner：Node 只负责调用与保证输出结构
+        reasoning = self.reasoner(query, docs)
 
-        # 保持原结构不被破坏：只在原 data 上新增字段（边界清晰）
         data["reasoning"] = reasoning
         return data
-
 
 
 class MemoryNode(BaseNode):
