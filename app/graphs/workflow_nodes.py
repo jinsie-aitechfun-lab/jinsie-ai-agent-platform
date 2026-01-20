@@ -145,26 +145,40 @@ class OutputNode(BaseNode):
     """
     Workflow 的输出节点：生成最终结果（给用户看的 answer）
 
-    Skeleton 阶段目标：
-    - 不做真实 LLM 生成
-    - 只把 reasoning + docs 组织成一个可读的占位 answer
-    - 不破坏已有字段，只新增 answer
+    目标：
+    - 默认仍用 stub renderer（保证不炸）
+    - 允许注入自定义 renderer（未来接 LLM / 模板渲染 / 多格式输出）
+    - Node 只负责协议与边界，不负责“具体怎么生成 answer”
     """
 
-    def run(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        query = data.get("query", "")
-        reasoning = data.get("reasoning", "")
-        docs = data.get("docs", [])
+    def __init__(self, name: str, renderer=None):
+        super().__init__(name=name)
+        self.renderer = renderer or self._stub_renderer
 
-        # 占位答案：让系统“可对外展示”
+    def _stub_renderer(self, query: str, reasoning: str, docs):
         doc_preview = "; ".join([d.get("doc_id", "unknown") for d in docs])
-        answer = (
+        return (
             f"[stub answer]\n"
             f"- query: {query}\n"
             f"- reasoning: {reasoning}\n"
             f"- docs: {doc_preview}\n"
             f"Next step would generate a natural language answer."
         )
+
+    def run(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        输入协议：
+        - data: {"query": str, "docs": list[dict], "reasoning": str, ...}
+
+        输出协议（新增字段）：
+        - {"answer": str, ...}  且不破坏已有字段
+        """
+        query = data.get("query", "")
+        reasoning = data.get("reasoning", "")
+        docs = data.get("docs", [])
+
+        # 变化点被隔离在 renderer：Node 只负责调用与保证输出结构
+        answer = self.renderer(query, reasoning, docs)
 
         data["answer"] = answer
         return data
