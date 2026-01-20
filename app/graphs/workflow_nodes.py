@@ -122,6 +122,29 @@ class MemoryNode(BaseNode):
 
 
 class OutputNode(BaseNode):
-    """Workflow 的输出节点：生成最终结果"""
+    """
+    Workflow 的输出节点：生成最终结果（给用户看的 answer）
 
-    pass
+    Skeleton 阶段目标：
+    - 不做真实 LLM 生成
+    - 只把 reasoning + docs 组织成一个可读的占位 answer
+    - 不破坏已有字段，只新增 answer
+    """
+
+    def run(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        query = data.get("query", "")
+        reasoning = data.get("reasoning", "")
+        docs = data.get("docs", [])
+
+        # 占位答案：让系统“可对外展示”
+        doc_preview = "; ".join([d.get("doc_id", "unknown") for d in docs])
+        answer = (
+            f"[stub answer]\n"
+            f"- query: {query}\n"
+            f"- reasoning: {reasoning}\n"
+            f"- docs: {doc_preview}\n"
+            f"Next step would generate a natural language answer."
+        )
+
+        data["answer"] = answer
+        return data

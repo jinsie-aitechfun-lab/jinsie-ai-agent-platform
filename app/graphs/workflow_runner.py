@@ -10,7 +10,7 @@ Minimal Workflow Runner ( Skeleton)
 from typing import Any, Dict, List, Optional
 import json
 
-from app.graphs.workflow_nodes import InputNode, RetrievalNode, ReasoningNode
+from app.graphs.workflow_nodes import InputNode, RetrievalNode, ReasoningNode, OutputNode
 
 def _pretty(obj: Any) -> str:
     try:
@@ -49,8 +49,9 @@ def run_minimal_workflow(raw_input: str) -> Dict[str, Any]:
     input_node = InputNode(name="input")
     retrieval_node = RetrievalNode(name="retrieval")
     reasoning_node = ReasoningNode(name="reasoning")
+    output_node = OutputNode(name="output")
     
-    nodes = [input_node, retrieval_node,reasoning_node]
+    nodes = [input_node, retrieval_node,reasoning_node, output_node]
     data: Dict[str, Any] = {"raw_input": raw_input}
 
     return run_nodes(nodes, data, trace=True)
