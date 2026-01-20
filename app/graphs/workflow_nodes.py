@@ -102,38 +102,34 @@ class ReasoningNode(BaseNode):
     Workflow 的推理节点：做决策、规划、组合
 
     目标：
-    - 默认仍用 stub reasoner（保证不炸）
-    - 允许注入自定义 reasoner（未来接真实 Planner / LLM 推理 / 规则引擎）
-    - Node 只负责协议与边界，不负责“具体怎么推理”
+    - 不接 LLM
+    - 用“可注入 reasoner”产生结构化 plan
+    - 不破坏已有字段，只新增 plan
     """
 
     def __init__(self, name: str, reasoner=None):
         super().__init__(name=name)
         self.reasoner = reasoner or self._stub_reasoner
 
-    def _stub_reasoner(self, query: str, docs):
-        return (
-            f"[stub reasoning] received query='{query}', docs_count={len(docs)}. "
-            "Next step would combine docs into an answer plan."
-        )
-
-    def run(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        输入协议：
-        - data: {"query": str, "docs": list[dict], ...}
-
-        输出协议（新增字段）：
-        - {"query": str, "docs": list[dict], "reasoning": str, ...}
-        """
+    def _stub_reasoner(self, data: Dict[str, Any]) -> Dict[str, Any]:
         query = data.get("query", "")
         docs = data.get("docs", [])
+        return {
+            "task_type": "other",
+            "docs_count": len(docs),
+            "next_action": "clarify_or_answer",
+            "outline": [
+                "extract key points from docs",
+                "organize into a clear structure",
+                "produce final answer",
+            ],
+            "note": f"[stub] received query='{query}'",
+        }
 
-        # 变化点被隔离在 reasoner：Node 只负责调用与保证输出结构
-        reasoning = self.reasoner(query, docs)
-
-        data["reasoning"] = reasoning
+    def run(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        plan = self.reasoner(data)
+        data["plan"] = plan
         return data
-
 
 class MemoryNode(BaseNode):
     """Workflow 的记忆节点：存储 / 读取上下文"""
@@ -145,40 +141,52 @@ class OutputNode(BaseNode):
     """
     Workflow 的输出节点：生成最终结果（给用户看的 answer）
 
-    目标：
-    - 默认仍用 stub renderer（保证不炸）
-    - 允许注入自定义 renderer（未来接 LLM / 模板渲染 / 多格式输出）
-    - Node 只负责协议与边界，不负责“具体怎么生成 answer”
+    Step 14 目标：
+    - 不接 LLM
+    - 优先使用 plan（结构化推理结果）来渲染 answer
+    - 保持可插拔 renderer
+    - 不破坏已有字段，只新增/覆盖 answer
     """
 
     def __init__(self, name: str, renderer=None):
         super().__init__(name=name)
         self.renderer = renderer or self._stub_renderer
 
-    def _stub_renderer(self, query: str, reasoning: str, docs):
-        doc_preview = "; ".join([d.get("doc_id", "unknown") for d in docs])
-        return (
-            f"[stub answer]\n"
-            f"- query: {query}\n"
-            f"- reasoning: {reasoning}\n"
-            f"- docs: {doc_preview}\n"
-            f"Next step would generate a natural language answer."
-        )
-
-    def run(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        输入协议：
-        - data: {"query": str, "docs": list[dict], "reasoning": str, ...}
-
-        输出协议（新增字段）：
-        - {"answer": str, ...}  且不破坏已有字段
-        """
+    def _stub_renderer(self, data: Dict[str, Any]) -> str:
         query = data.get("query", "")
-        reasoning = data.get("reasoning", "")
+        plan = data.get("plan", {})
         docs = data.get("docs", [])
 
-        # 变化点被隔离在 renderer：Node 只负责调用与保证输出结构
-        answer = self.renderer(query, reasoning, docs)
+        task_type = plan.get("task_type", "other")
+        docs_count = plan.get("docs_count", len(docs))
+        next_action = plan.get("next_action", "unknown")
+        outline = plan.get("outline", [])
 
-        data["answer"] = answer
+        # 把 docs 做成“要点列表”（更像真实输出，而非 doc_id 拼接）
+        doc_bullets = []
+        for d in docs:
+            content = d.get("content", "")
+            if content:
+                doc_bullets.append(f"- {content}")
+        doc_block = "\n".join(doc_bullets) if doc_bullets else "- (no docs)"
+
+        outline_block = "\n".join([f"- {x}" for x in outline]) if outline else "- (no outline)"
+
+        answer = (
+            f"[stub answer]\n"
+            f"## 任务\n"
+            f"- query: {query}\n"
+            f"- task_type: {task_type}\n"
+            f"- docs_count: {docs_count}\n"
+            f"- next_action: {next_action}\n\n"
+            f"## 依据（docs）\n"
+            f"{doc_block}\n\n"
+            f"## 计划（outline）\n"
+            f"{outline_block}\n\n"
+            f"Next step would generate a natural language answer with an LLM."
+        )
+        return answer
+
+    def run(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        data["answer"] = self.renderer(data)
         return data

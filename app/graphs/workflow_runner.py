@@ -9,6 +9,9 @@ Minimal Workflow Runner ( Skeleton)
 
 from typing import Any, Dict, List, Optional
 import json
+from app.graphs.retrievers import keyword_retriever
+from app.graphs.reasoners import rule_based_reasoner
+
 
 from app.graphs.workflow_nodes import InputNode, RetrievalNode, ReasoningNode, OutputNode
 
@@ -48,17 +51,9 @@ def run_minimal_workflow(raw_input: str) -> Dict[str, Any]:
     """
     input_node = InputNode(name="input")
     # retrieval_node = RetrievalNode(name="retrieval")
-    def custom_retriever(query: str):
-        return [
-            {"doc_id": "custom_1", "content": f"[custom] {query}"},
-        ]
+    retrieval_node = RetrievalNode(name="retrieval", retriever=keyword_retriever)
+    reasoning_node = ReasoningNode(name="reasoning", reasoner=rule_based_reasoner)
 
-    retrieval_node = RetrievalNode(name="retrieval", retriever=custom_retriever)
-
-    
-    
-    
-    reasoning_node = ReasoningNode(name="reasoning")
     output_node = OutputNode(name="output")
     
     nodes = [input_node, retrieval_node,reasoning_node, output_node]
