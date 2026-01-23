@@ -48,6 +48,7 @@ class InputNode(BaseNode):
             "query": raw_input
         }
 
+
 class RetrievalNode(BaseNode):
     """
     检索节点：根据 query 获取候选文档
@@ -131,6 +132,7 @@ class ReasoningNode(BaseNode):
         data["plan"] = plan
         return data
 
+
 class MemoryNode(BaseNode):
     """Workflow 的记忆节点：存储 / 读取上下文"""
 
@@ -141,7 +143,7 @@ class OutputNode(BaseNode):
     """
     Workflow 的输出节点：生成最终结果（给用户看的 answer）
 
-    Step 14 目标：
+    目标：
     - 不接 LLM
     - 优先使用 plan（结构化推理结果）来渲染 answer
     - 保持可插拔 renderer
@@ -150,30 +152,79 @@ class OutputNode(BaseNode):
 
     def __init__(self, name: str, renderer=None):
         super().__init__(name=name)
-        self.renderer = renderer or self._stub_renderer
+        self.renderer = renderer or self._default_renderer
 
-    def _stub_renderer(self, data: Dict[str, Any]) -> str:
-        query = data.get("query", "")
-        plan = data.get("plan", {})
-        docs = data.get("docs", [])
+    def _safe_text(self, s: Any) -> str:
+        if isinstance(s, str):
+            return s.strip()
+        return ""
 
-        task_type = plan.get("task_type", "other")
-        docs_count = plan.get("docs_count", len(docs))
-        next_action = plan.get("next_action", "unknown")
-        outline = plan.get("outline", [])
-
-        # 把 docs 做成“要点列表”（更像真实输出，而非 doc_id 拼接）
-        doc_bullets = []
+    def _pick_doc_points(self, docs: list[dict], max_points: int = 3) -> list[str]:
+        """
+        从 docs 中挑选若干条 content 作为要点（不做复杂 NLP，规则化、可控、可回滚）。
+        """
+        points: list[str] = []
         for d in docs:
-            content = d.get("content", "")
+            if len(points) >= max_points:
+                break
+            content = self._safe_text(d.get("content"))
+            if not content:
+                continue
+            points.append(content)
+        return points
+
+    def _default_renderer(self, data: Dict[str, Any]) -> str:
+        query = self._safe_text(data.get("query", ""))
+        plan = data.get("plan", {}) or {}
+        docs = data.get("docs", []) or []
+
+        task_type = self._safe_text(plan.get("task_type", "other")) or "other"
+        docs_count = plan.get("docs_count", len(docs))
+        next_action = self._safe_text(plan.get("next_action", "unknown")) or "unknown"
+        outline = plan.get("outline", []) or []
+
+        # 1) summary：输出 2~3 条要点（更像真实产品输出）
+        if task_type == "summary":
+            points = self._pick_doc_points(docs, max_points=3)
+            if points:
+                bullets = "\n".join([f"- {p}" for p in points])
+                return (
+                    f"今天你主要完成了：\n"
+                    f"{bullets}"
+                )
+
+            # 没有 docs 时给出可执行的下一步提示（仍不接 LLM）
+            return (
+                f"我还没拿到可总结的依据（docs 为空）。\n"
+                f"- 你的输入：{query}\n"
+                f"- 建议：先补充检索/记录，再生成总结。"
+            )
+
+        # 2) qa：保守输出（不接 LLM，先把 docs 作为依据呈现）
+        if task_type == "qa":
+            points = self._pick_doc_points(docs, max_points=3)
+            if points:
+                bullets = "\n".join([f"- {p}" for p in points])
+            else:
+                bullets = "- (no docs)"
+            return (
+                f"问题：{query}\n\n"
+                f"我目前的依据（docs）：\n"
+                f"{bullets}\n\n"
+                f"下一步动作：{next_action}"
+            )
+
+        # 3) other：沿用结构化输出（但去掉 stub 文案）
+        doc_bullets: list[str] = []
+        for d in docs:
+            content = self._safe_text(d.get("content"))
             if content:
                 doc_bullets.append(f"- {content}")
         doc_block = "\n".join(doc_bullets) if doc_bullets else "- (no docs)"
 
-        outline_block = "\n".join([f"- {x}" for x in outline]) if outline else "- (no outline)"
+        outline_block = "\n".join([f"- {self._safe_text(x)}" for x in outline if self._safe_text(x)]) or "- (no outline)"
 
-        answer = (
-            f"[stub answer]\n"
+        return (
             f"## 任务\n"
             f"- query: {query}\n"
             f"- task_type: {task_type}\n"
@@ -182,10 +233,8 @@ class OutputNode(BaseNode):
             f"## 依据（docs）\n"
             f"{doc_block}\n\n"
             f"## 计划（outline）\n"
-            f"{outline_block}\n\n"
-            f"Next step would generate a natural language answer with an LLM."
+            f"{outline_block}"
         )
-        return answer
 
     def run(self, data: Dict[str, Any]) -> Dict[str, Any]:
         data["answer"] = self.renderer(data)
