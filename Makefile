@@ -3,23 +3,29 @@ VENV_DIR := .venv
 VENV_PY  := $(VENV_DIR)/bin/python
 
 # 默认命令
-.PHONY: help venv install env-check run test clean runner-contract
+.PHONY: help venv install env-check run test clean runner-contract workflow workflow-cli-verify
 
 help:
 	@echo "可用命令："
-	@echo "  make venv            创建虚拟环境 (.venv)"
-	@echo "  make install         在虚拟环境中安装依赖 (requirements.txt / requirements-dev.txt)"
-	@echo "  make env-check       运行环境自检脚本 scripts/env_check.py（使用 .venv）"
-	@echo "  make run             运行主程序 main.py"
-	@echo "  make test            运行测试（如 pytest）"
-	@echo "  make runner-contract 运行 Runner Contract Gate（本地契约校验入口，对齐 CI）"
-	@echo "  make clean           删除虚拟环境和临时文件"
+	@echo "  make venv              创建虚拟环境 (.venv)"
+	@echo "  make install           在虚拟环境中安装依赖 (requirements.txt / requirements-dev.txt)"
+	@echo "  make env-check         运行环境自检脚本 scripts/env_check.py（使用 .venv）"
+	@echo "  make run               运行主程序 main.py"
+	@echo "  make test              运行测试（如 pytest）"
+	@echo "  make runner-contract   运行 Runner Contract Gate（本地契约校验入口，对齐 CI）"
+	@echo "  make workflow          运行 workflow demo（answer-only）"
+	@echo "  make workflow-cli-verify 运行 workflow CLI 回归验证"
+	@echo "  make clean             删除虚拟环境和临时文件"
 
-# 创建虚拟环境
+# 创建虚拟环境（幂等：存在则跳过）
 venv:
-	@echo ">>> 创建虚拟环境：$(VENV_DIR)"
-	python -m venv $(VENV_DIR)
-	@echo ">>> 虚拟环境已创建。"
+	@if [ -d "$(VENV_DIR)" ]; then \
+		echo ">>> 虚拟环境已存在：$(VENV_DIR)（跳过创建）"; \
+	else \
+		echo ">>> 创建虚拟环境：$(VENV_DIR)"; \
+		python -m venv $(VENV_DIR); \
+		echo ">>> 虚拟环境已创建。"; \
+	fi
 
 # 安装依赖
 install: venv
@@ -55,6 +61,16 @@ runner-contract: install
 	PYTHONPATH=. $(VENV_PY) scripts/generate_samples.py
 	git diff --exit-code
 	@test -z "$$(git status --porcelain)"
+
+# workflow demo（answer-only）
+workflow: install
+	@echo ">>> Run workflow (answer-only demo)"
+	PYTHONPATH=. $(VENV_PY) scripts/run_workflow.py "帮我总结一下今天我做了什么" --answer-only
+
+# workflow CLI 回归验证
+workflow-cli-verify: install
+	@echo ">>> Verify workflow CLI"
+	PYTHONPATH=. $(VENV_PY) scripts/verify_workflow_cli.py
 
 # 运行主程序
 run: install
