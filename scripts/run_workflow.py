@@ -32,25 +32,22 @@ def main() -> int:
     parser.add_argument(
         "--json",
         action="store_true",
-        help="Print full final output as JSON (default).",
+        help="Print full final output as JSON.",
     )
     parser.add_argument(
         "--answer-only",
         action="store_true",
-        help="Print only final answer string.",
+        help="Print only final answer string (no JSON).",
     )
     args = parser.parse_args()
 
-    # Note: workflow_runner.run_minimal_workflow currently runs with trace=True in code.
-    # This CLI keeps a stable interface; if you later wire trace into runner, you can
-    # pass args.trace through without changing callers.
-    out: Dict[str, Any] = run_minimal_workflow(args.query)
+    out: Dict[str, Any] = run_minimal_workflow(args.query, trace=args.trace)
 
     if args.answer_only:
         print(out.get("answer", ""))
         return 0
 
-    # default: show json unless explicitly disabled in future
+    # default behavior: print JSON (keeping CLI convenient in pipelines)
     if args.json or True:
         print(_pretty(out))
         return 0
