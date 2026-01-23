@@ -12,14 +12,15 @@ import json
 from app.graphs.retrievers import keyword_retriever
 from app.graphs.reasoners import rule_based_reasoner
 
-
 from app.graphs.workflow_nodes import InputNode, RetrievalNode, ReasoningNode, OutputNode
+
 
 def _pretty(obj: Any) -> str:
     try:
         return json.dumps(obj, ensure_ascii=False, indent=2)
     except TypeError:
         return str(obj)
+
 
 def run_nodes(
     nodes,
@@ -44,27 +45,24 @@ def run_nodes(
     return data
 
 
-def run_minimal_workflow(raw_input: str) -> Dict[str, Any]:
+def run_minimal_workflow(raw_input: str, trace: bool = False) -> Dict[str, Any]:
     """
     最小工作流：
     raw_input -> InputNode -> RetrievalNode -> output dict
     """
     input_node = InputNode(name="input")
-    # retrieval_node = RetrievalNode(name="retrieval")
     retrieval_node = RetrievalNode(name="retrieval", retriever=keyword_retriever)
     reasoning_node = ReasoningNode(name="reasoning", reasoner=rule_based_reasoner)
-
     output_node = OutputNode(name="output")
-    
-    nodes = [input_node, retrieval_node,reasoning_node, output_node]
+
+    nodes = [input_node, retrieval_node, reasoning_node, output_node]
     data: Dict[str, Any] = {"raw_input": raw_input}
 
-    return run_nodes(nodes, data, trace=True)
+    return run_nodes(nodes, data, trace=trace)
 
 
 if __name__ == "__main__":
-    result = run_minimal_workflow("帮我总结一下今天我做了什么")
+    result = run_minimal_workflow("帮我总结一下今天我做了什么", trace=True)
 
     print("\n=== FINAL OUTPUT ===")
     print(_pretty(result))
-
