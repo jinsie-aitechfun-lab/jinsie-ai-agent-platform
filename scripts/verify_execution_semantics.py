@@ -11,7 +11,7 @@ import subprocess
 import sys
 
 
-Expectation = Literal["REJECT", "FAILED", "BLOCKED"]
+Expectation = Literal["REJECT", "FAILED", "BLOCKED", "COMPLETED"]
 PlanPolicy = Literal["REQUIRE_VALID", "ALLOW_ERRORS"]
 
 
@@ -128,6 +128,39 @@ def main() -> int:
                 ],
             ),
             "BLOCKED",
+            "ALLOW_ERRORS",
+        )
+    )
+
+    # Case 3: reference drift ".output.docs" should still work (executor-side resolution)
+    # We allow plan errors here because some validators may choose to type-check tool args strictly in future.
+    cases.append(
+        (
+            "ref_drift_output_docs_should_complete",
+            _base_payload(
+                "executor should resolve .output.docs to upstream dependency output.docs",
+                steps=[
+                    _base_step(
+                        "step_1",
+                        title="search workflow docs",
+                        dependencies=[],
+                        tool_name="search_tool",
+                        tool_args={"query": "workflow"},
+                    ),
+                    _base_step(
+                        "step_2",
+                        title="summarize using drift ref",
+                        dependencies=["step_1"],
+                        tool_name="summarize_tool",
+                        tool_args={
+                            # Intentionally drifted reference form observed from planner output
+                            "docs": ".output.docs",
+                            "max_points": 2,
+                        },
+                    ),
+                ],
+            ),
+            "COMPLETED",
             "ALLOW_ERRORS",
         )
     )

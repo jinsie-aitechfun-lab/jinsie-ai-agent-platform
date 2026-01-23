@@ -7,6 +7,8 @@ from typing import Any, Dict, List
 from app.tools.base import ToolSpec
 from app.tools.echo_tool import ECHO_TOOL
 from app.tools.time_tool import TIME_TOOL
+from app.tools.search_tool import SEARCH_TOOL
+from app.tools.summarize_tool import SUMMARIZE_TOOL
 
 
 _TOOL_REGISTRY: Dict[str, ToolSpec] = {}
@@ -57,10 +59,20 @@ def dispatch_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 def bootstrap_default_tools() -> None:
     register(ECHO_TOOL)
     register(TIME_TOOL)
+    register(SEARCH_TOOL)
+    register(SUMMARIZE_TOOL)
 
     # compatibility aliases (older prompts / model drift)
     _TOOL_REGISTRY["time_tool"] = TIME_TOOL
     _TOOL_REGISTRY["get_time_tool"] = TIME_TOOL
+
+    # search compatibility aliases (model drift)
+    _TOOL_REGISTRY["search"] = SEARCH_TOOL
+    _TOOL_REGISTRY["search_local"] = SEARCH_TOOL
+
+    # summarize compatibility aliases (model drift)
+    _TOOL_REGISTRY["summarize"] = SUMMARIZE_TOOL
+    _TOOL_REGISTRY["summary"] = SUMMARIZE_TOOL
 
 
 bootstrap_default_tools()

@@ -74,6 +74,124 @@ def _detect_degraded(tool_name: str, args: dict[str, Any]) -> Tuple[bool, Option
     return True, reason, degraded_from
 
 
+def _normalize_ref_string(ref: str, *, deps: list[str], context: dict[str, dict[str, Any]]) -> str:
+    """
+    Normalize common model-drift reference strings into the canonical form.
+
+    Canonical:
+    - "$step_1.output.docs"
+
+    Accept (model drift):
+    - "step_1.output.docs"
+    - ".output.step_1.output.docs"
+    - "output.step_1.output.docs"
+    - ".output.docs" / "output.docs"   (relative form)
+
+    Relative rule (Skeleton, deterministic):
+    - If ref is ".output.*" (no step_id) AND there is exactly 1 dependency,
+      rewrite it to "$<dep>.output.*".
+
+    Notes:
+    - If normalization cannot safely infer intent, return the original string.
+    """
+    s = (ref or "").strip()
+    if not s:
+        return s
+
+    # Already canonical
+    if s.startswith("$step_"):
+        return s
+
+    # Relative: ".output.docs" or "output.docs" -> "$<only_dep>.output.docs"
+    if (s.startswith(".output.") or s.startswith("output.")) and "step_" not in s:
+        if isinstance(deps, list) and len(deps) == 1 and isinstance(deps[0], str) and deps[0] in context:
+            dep = deps[0]
+            if s.startswith(".output."):
+                tail = s[len(".output.") :]
+            else:
+                tail = s[len("output.") :]
+            return f"${dep}.output.{tail}"
+        return s
+
+    # Drift: ".output.step_1.output.docs" or "output.step_1.output.docs"
+    if s.startswith(".output."):
+        s2 = s[len(".output.") :].lstrip()
+        if s2.startswith("step_"):
+            return "$" + s2
+        return s
+
+    if s.startswith("output."):
+        s2 = s[len("output.") :].lstrip()
+        if s2.startswith("step_"):
+            return "$" + s2
+        return s
+
+    # Drift: "step_1.output.docs"
+    if s.startswith("step_"):
+        return "$" + s
+
+    return s
+
+
+def _resolve_ref_string(ref: str, *, deps: list[str], context: dict[str, dict[str, Any]]) -> Any:
+    """
+    Resolve a minimal step reference expression.
+
+    Supported canonical after normalization:
+    - "$step_1.output"
+    - "$step_1.output.docs"
+    - "$step_1" (returns the whole step status dict)
+
+    Notes:
+    - This is intentionally minimal and deterministic (Skeleton phase).
+    - If the reference cannot be resolved, raise ValueError.
+    """
+    s = _normalize_ref_string(ref, deps=deps, context=context)
+
+    if not s.startswith("$step_"):
+        return ref  # keep original unmodified if not resolvable / not a ref
+
+    expr = s[1:]  # strip leading '$'
+    parts = expr.split(".")
+    step_id = parts[0]  # "step_1"
+    rest = parts[1:]  # ["output", "docs"] etc.
+
+    st = context.get(step_id)
+    if not st:
+        raise ValueError(f"unresolved reference: {ref} (unknown step_id)")
+
+    cur: Any = st
+    for key in rest:
+        if isinstance(cur, dict) and key in cur:
+            cur = cur[key]
+        else:
+            raise ValueError(f"unresolved reference: {ref} (missing path: {key})")
+    return cur
+
+
+def _resolve_refs(value: Any, *, deps: list[str], context: dict[str, dict[str, Any]]) -> Any:
+    """
+    Recursively resolve step references inside args.
+
+    - str: normalize; if becomes "$step_" => resolve
+    - dict/list: deep-walk
+    - otherwise: passthrough
+    """
+    if isinstance(value, str):
+        s = _normalize_ref_string(value, deps=deps, context=context)
+        if s.startswith("$step_"):
+            return _resolve_ref_string(value, deps=deps, context=context)
+        return value
+
+    if isinstance(value, list):
+        return [_resolve_refs(v, deps=deps, context=context) for v in value]
+
+    if isinstance(value, dict):
+        return {k: _resolve_refs(v, deps=deps, context=context) for k, v in value.items()}
+
+    return value
+
+
 def compute_task_status(execution_results: list[dict[str, Any]]) -> str:
     """
     Compute overall task status from per-step execution_results.
@@ -107,20 +225,14 @@ def compute_task_status(execution_results: list[dict[str, Any]]) -> str:
             any_ok = True
             continue
 
-        # not ok
         if skipped:
             any_skipped = True
-
-            # strict degraded: not a "hard blocked" dependency, treat as PARTIAL
             if "dependency not satisfied (degraded)" in reason:
                 continue
-
-            # hard dependency not satisfied => BLOCKED
             if "dependency not satisfied" in reason:
                 return "BLOCKED"
             continue
 
-        # not ok and not skipped
         if "unknown dependency" in reason or "unknown dependency" in error:
             return "BLOCKED"
 
@@ -148,6 +260,10 @@ def execute_plan(payload: dict[str, Any], *, strict_degraded: bool = False) -> d
     strict_degraded:
     - False (default): degraded does NOT block downstream deps (current behavior)
     - True: degraded is treated as NOT satisfiable dependency for downstream steps
+
+    Step reference semantics (minimal):
+    - args may include "$step_1.output.docs" style references (canonical).
+    - Also supports a few deterministic drift forms (see _normalize_ref_string).
     """
     steps: list[dict[str, Any]] = payload.get("steps", []) or []
     results: list[dict[str, Any]] = []
@@ -158,7 +274,8 @@ def execute_plan(payload: dict[str, Any], *, strict_degraded: bool = False) -> d
         if isinstance(sid, str) and sid.strip():
             declared_ids.add(sid)
 
-    # status for dependency checks
+    # status for dependency checks + reference resolution
+    # shape: {step_id: {"ok": bool, "skipped": bool, "degraded": bool, "output": Any}}
     status: dict[str, dict[str, Any]] = {}
 
     for step in steps:
@@ -196,7 +313,7 @@ def execute_plan(payload: dict[str, Any], *, strict_degraded: bool = False) -> d
             }
             results.append(r)
             if isinstance(step_id, str):
-                status[step_id] = {"ok": False, "skipped": False, "degraded": False}
+                status[step_id] = {"ok": False, "skipped": False, "degraded": False, "output": None}
             continue
 
         # --- dependency satisfiable check ---
@@ -216,7 +333,6 @@ def execute_plan(payload: dict[str, Any], *, strict_degraded: bool = False) -> d
             if degraded_deps and not failed_deps:
                 reason = f"dependency not satisfied (degraded): {degraded_deps}"
             else:
-                # if any hard failed deps exist, we keep it as hard dependency not satisfied
                 all_bad = failed_deps + degraded_deps
                 reason = f"dependency not satisfied: {all_bad}"
 
@@ -228,15 +344,21 @@ def execute_plan(payload: dict[str, Any], *, strict_degraded: bool = False) -> d
             }
             results.append(r)
             if isinstance(step_id, str):
-                status[step_id] = {"ok": False, "skipped": True, "degraded": False}
+                status[step_id] = {"ok": False, "skipped": True, "degraded": False, "output": None}
             continue
 
         # --- execute tool ---
         try:
             tool_name, args = _parse_tool(step)
-            out = dispatch_tool(tool_name, args)
 
-            degraded, degraded_reason, degraded_from = _detect_degraded(tool_name, args)
+            # Resolve references in args (canonical + deterministic drift support)
+            resolved_args = _resolve_refs(args, deps=deps if isinstance(deps, list) else [], context=status)
+            if not isinstance(resolved_args, dict):
+                raise ValueError("tool.args must resolve to an object")
+
+            out = dispatch_tool(tool_name, resolved_args)
+
+            degraded, degraded_reason, degraded_from = _detect_degraded(tool_name, resolved_args)
 
             r = {
                 **base,
@@ -251,7 +373,7 @@ def execute_plan(payload: dict[str, Any], *, strict_degraded: bool = False) -> d
             }
             results.append(r)
             if isinstance(step_id, str):
-                status[step_id] = {"ok": True, "skipped": False, "degraded": degraded}
+                status[step_id] = {"ok": True, "skipped": False, "degraded": degraded, "output": out}
         except Exception as e:
             inferred_tool = None
             if tool_name:
@@ -275,7 +397,7 @@ def execute_plan(payload: dict[str, Any], *, strict_degraded: bool = False) -> d
             }
             results.append(r)
             if isinstance(step_id, str):
-                status[step_id] = {"ok": False, "skipped": False, "degraded": False}
+                status[step_id] = {"ok": False, "skipped": False, "degraded": False, "output": None}
 
     task_status = compute_task_status(results)
 
@@ -315,7 +437,6 @@ def execute_plan(payload: dict[str, Any], *, strict_degraded: bool = False) -> d
         reason = (r.get("reason") or "")
         msg = reason + " " + (r.get("error") or "")
 
-        # hard blocked only (exclude strict-degraded skips)
         if r.get("skipped") and "dependency not satisfied" in reason and "dependency not satisfied (degraded)" not in reason:
             if isinstance(sid, str):
                 blocked_steps.append(sid)
