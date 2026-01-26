@@ -25,6 +25,36 @@ def main() -> int:
         help="User input / query text (default: a demo query).",
     )
     parser.add_argument(
+        "--retriever",
+        choices=["keyword", "vector"],
+        default="keyword",
+        help="Choose retrieval strategy: keyword (no embedding) or vector (embedding).",
+    )
+    parser.add_argument(
+        "--doc",
+        type=str,
+        default="docs/samples/rag_seed.md",
+        help="Local doc path used by vector retriever (default: docs/samples/rag_seed.md).",
+    )
+    parser.add_argument(
+        "--top-k",
+        type=int,
+        default=3,
+        help="How many docs/chunks to retrieve.",
+    )
+    parser.add_argument(
+        "--chunk-size",
+        type=int,
+        default=900,
+        help="Chunk size (chars) used by vector retriever.",
+    )
+    parser.add_argument(
+        "--chunk-overlap",
+        type=int,
+        default=120,
+        help="Chunk overlap (chars) used by vector retriever.",
+    )
+    parser.add_argument(
         "--trace",
         action="store_true",
         help="Print node-by-node BEFORE/AFTER data snapshots.",
@@ -41,7 +71,15 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    out: Dict[str, Any] = run_minimal_workflow(args.query, trace=args.trace)
+    out: Dict[str, Any] = run_minimal_workflow(
+        args.query,
+        trace=args.trace,
+        retriever=args.retriever,
+        doc=args.doc,
+        top_k=args.top_k,
+        chunk_size=args.chunk_size,
+        chunk_overlap=args.chunk_overlap,
+    )
 
     if args.answer_only:
         print(out.get("answer", ""))

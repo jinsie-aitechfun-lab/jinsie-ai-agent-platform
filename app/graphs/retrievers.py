@@ -1,21 +1,27 @@
 """
-Retrievers (Strategy Functions)
+Retrievers (Engineering Stable Version)
 
-这里放“可替换检索策略”。
-原则：
-- 输入：query: str
-- 输出：docs: list[dict]，每项至少有 doc_id / content
-- 不依赖网络，不引入重依赖（Skeleton -> 可演进）
+目标：
+- keyword_retriever：零依赖本地召回（开发/调试阶段使用）
+- vector_retriever：Embedding 语义召回（RAG 正式版）
+
+统一协议：
+return: List[Dict[str, Any]]
+{
+    "doc_id": str,
+    "content": str,
+    "score": float
+}
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
+from math import sqrt
 
+# ============================================================
+# Mini corpus（本地安全语料）
+# ============================================================
 
 def _mini_corpus() -> List[Dict[str, str]]:
-    """
-    最小语料库（可替换）。
-    目标：让检索从 stub 进入“真实但安全”的阶段。
-    """
     return [
         {
             "doc_id": "note_1",
@@ -32,25 +38,89 @@ def _mini_corpus() -> List[Dict[str, str]]:
     ]
 
 
+# ============================================================
+# Keyword Retriever（零依赖版）
+# ============================================================
+
 def keyword_retriever(query: str, top_k: int = 2) -> List[Dict[str, Any]]:
-    """
-    极简关键字检索：
-    - 用 query 的字符片段做匹配计分
-    - 返回 top_k 条 doc
-    """
     query = (query or "").strip()
     corpus = _mini_corpus()
 
     if not query:
-        return corpus[:top_k]
+        return [
+            {"doc_id": d["doc_id"], "content": d["content"], "score": 1.0}
+            for d in corpus[:top_k]
+        ]
 
-    def score(text: str) -> int:
-        # 非严格分词：按字符命中计数（足够用于 Step 12）
-        hits = 0
-        for ch in query:
-            if ch.strip() and ch in text:
-                hits += 1
-        return hits
+    def score_text(text: str) -> float:
+        hits = sum(1 for ch in query if ch.strip() and ch in text)
+        denom = max(1, len([c for c in query if c.strip()]))
+        return hits / denom
 
-    ranked = sorted(corpus, key=lambda d: score(d["content"]), reverse=True)
-    return ranked[:top_k]
+    ranked = sorted(corpus, key=lambda d: score_text(d["content"]), reverse=True)
+
+    return [
+        {
+            "doc_id": d["doc_id"],
+            "content": d["content"],
+            "score": score_text(d["content"]),
+        }
+        for d in ranked[: max(1, top_k)]
+    ]
+
+
+# ============================================================
+# Vector Retriever（Embedding 语义召回）
+# ============================================================
+
+def _dot(a: List[float], b: List[float]) -> float:
+    return sum(x * y for x, y in zip(a, b))
+
+
+def _norm(a: List[float]) -> float:
+    return sqrt(_dot(a, a))
+
+
+def _cosine(a: List[float], b: List[float]) -> float:
+    na = _norm(a)
+    nb = _norm(b)
+    if na == 0 or nb == 0:
+        return 0.0
+    return _dot(a, b) / (na * nb)
+
+
+def vector_retriever(
+    *,
+    query: str,
+    chunks: List[str],
+    embedding_model: str,
+    api_key: str,
+    base_url: str | None = None,
+    top_k: int = 3,
+) -> List[Dict[str, Any]]:
+
+    if not chunks:
+        return []
+
+    from openai import OpenAI  # 延迟导入，避免 keyword 模式被依赖拖慢
+
+    client = OpenAI(api_key=api_key, base_url=base_url)
+
+    resp = client.embeddings.create(model=embedding_model, input=chunks)
+    vecs = [d.embedding for d in resp.data]
+
+    q_vec = client.embeddings.create(model=embedding_model, input=[query]).data[0].embedding
+
+    scored: List[Tuple[float, int]] = [
+        (_cosine(q_vec, v), i) for i, v in enumerate(vecs)
+    ]
+    scored.sort(key=lambda x: x[0], reverse=True)
+
+    return [
+        {
+            "doc_id": f"chunk_{idx + 1}",
+            "content": chunks[idx],
+            "score": score,
+        }
+        for score, idx in scored[: max(1, top_k)]
+    ]

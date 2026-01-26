@@ -159,6 +159,13 @@ class OutputNode(BaseNode):
             return s.strip()
         return ""
 
+    def _safe_doc_id(self, d: Any) -> str:
+        if isinstance(d, dict):
+            v = d.get("doc_id", "")
+            if isinstance(v, str) and v.strip():
+                return v.strip()
+        return "unknown"
+
     def _pick_doc_points(self, docs: list[dict], max_points: int = 3) -> list[str]:
         """
         从 docs 中挑选若干条 content 作为要点（不做复杂 NLP，规则化、可控、可回滚）。
@@ -173,6 +180,22 @@ class OutputNode(BaseNode):
             points.append(content)
         return points
 
+    def _format_docs_as_bullets(self, docs: list[dict], max_points: int = 3) -> list[str]:
+        """
+        关键增强：把 doc_id 打出来，让输出具备“可解释引用”。
+        输出形态：- [doc_id] content
+        """
+        bullets: list[str] = []
+        for d in docs:
+            if len(bullets) >= max_points:
+                break
+            doc_id = self._safe_doc_id(d)
+            content = self._safe_text(d.get("content"))
+            if not content:
+                continue
+            bullets.append(f"- [{doc_id}] {content}")
+        return bullets
+
     def _default_renderer(self, data: Dict[str, Any]) -> str:
         query = self._safe_text(data.get("query", ""))
         plan = data.get("plan", {}) or {}
@@ -185,15 +208,14 @@ class OutputNode(BaseNode):
 
         # 1) summary：输出 2~3 条要点（更像真实产品输出）
         if task_type == "summary":
-            points = self._pick_doc_points(docs, max_points=3)
+            points = self._format_docs_as_bullets(docs, max_points=3)
             if points:
-                bullets = "\n".join([f"- {p}" for p in points])
+                bullets = "\n".join(points)
                 return (
                     f"今天你主要完成了：\n"
                     f"{bullets}"
                 )
 
-            # 没有 docs 时给出可执行的下一步提示（仍不接 LLM）
             return (
                 f"我还没拿到可总结的依据（docs 为空）。\n"
                 f"- 你的输入：{query}\n"
@@ -202,11 +224,8 @@ class OutputNode(BaseNode):
 
         # 2) qa：保守输出（不接 LLM，先把 docs 作为依据呈现）
         if task_type == "qa":
-            points = self._pick_doc_points(docs, max_points=3)
-            if points:
-                bullets = "\n".join([f"- {p}" for p in points])
-            else:
-                bullets = "- (no docs)"
+            points = self._format_docs_as_bullets(docs, max_points=3)
+            bullets = "\n".join(points) if points else "- (no docs)"
             return (
                 f"问题：{query}\n\n"
                 f"我目前的依据（docs）：\n"
@@ -214,12 +233,8 @@ class OutputNode(BaseNode):
                 f"下一步动作：{next_action}"
             )
 
-        # 3) other：沿用结构化输出（但去掉 stub 文案）
-        doc_bullets: list[str] = []
-        for d in docs:
-            content = self._safe_text(d.get("content"))
-            if content:
-                doc_bullets.append(f"- {content}")
+        # 3) other：沿用结构化输出（但补上 doc_id 引用）
+        doc_bullets = self._format_docs_as_bullets(docs, max_points=8)
         doc_block = "\n".join(doc_bullets) if doc_bullets else "- (no docs)"
 
         outline_block = "\n".join([f"- {self._safe_text(x)}" for x in outline if self._safe_text(x)]) or "- (no outline)"
