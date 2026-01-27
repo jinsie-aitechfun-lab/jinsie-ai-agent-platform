@@ -180,6 +180,23 @@ def _build_vector_retriever(
     return _r
 
 
+def build_default_nodes(
+    *,
+    retrieval_fn,
+    reasoner_fn,
+):
+    """
+    默认节点编排（可插拔）：
+    - 这里集中定义 nodes 的顺序
+    - 未来扩展多 Agent / 条件分支时，只改这里，不动 runner 主流程
+    """
+    input_node = InputNode(name="input")
+    retrieval_node = RetrievalNode(name="retrieval", retriever=retrieval_fn)
+    reasoning_node = ReasoningNode(name="reasoning", reasoner=reasoner_fn)
+    output_node = OutputNode(name="output")
+    return [input_node, retrieval_node, reasoning_node, output_node]
+
+
 def run_minimal_workflow(
     raw_input: str,
     *,
@@ -195,8 +212,6 @@ def run_minimal_workflow(
     最小工作流：
     raw_input -> InputNode -> RetrievalNode -> ReasoningNode -> OutputNode -> output dict
     """
-    input_node = InputNode(name="input")
-
     if retriever == "vector":
         if not doc:
             print("[error] --doc is required when --retriever=vector", file=sys.stderr)
@@ -212,11 +227,10 @@ def run_minimal_workflow(
 
     reasoner_fn = build_reasoner(reasoner)
 
-    retrieval_node = RetrievalNode(name="retrieval", retriever=retrieval_fn)
-    reasoning_node = ReasoningNode(name="reasoning", reasoner=reasoner_fn)
-    output_node = OutputNode(name="output")
-
-    nodes = [input_node, retrieval_node, reasoning_node, output_node]
+    nodes = build_default_nodes(
+        retrieval_fn=retrieval_fn,
+        reasoner_fn=reasoner_fn,
+    )
     data: Dict[str, Any] = {"raw_input": raw_input}
 
     return run_nodes(nodes, data, trace=trace)
