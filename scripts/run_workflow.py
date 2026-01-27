@@ -93,10 +93,11 @@ def main() -> int:
         return 0
 
     # default behavior: print JSON (keeping CLI convenient in pipelines)
-    if args.json or True:
+    if args.json:
         print(_pretty(out))
         return 0
 
+    print(_pretty(out))
     return 0
 
 
