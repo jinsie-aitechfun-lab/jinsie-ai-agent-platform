@@ -11,9 +11,10 @@ Contract（输出 plan 永远包含）：
 - outline: list[str]
 """
 
+
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Callable
 
 
 # 固定枚举（避免下游出现 "answer" 这种漂移值）
@@ -90,3 +91,57 @@ def rule_based_reasoner(data: Dict[str, Any]) -> Dict[str, Any]:
         ],
     }
     return plan
+
+
+def _build_simple_reasoner() -> Callable[[Dict[str, Any]], Dict[str, Any]]:
+    """
+    simple: 当前默认的规则推理（可控、稳定、可回滚）
+    """
+    return rule_based_reasoner
+
+
+def _build_cot_reasoner() -> Callable[[Dict[str, Any]], Dict[str, Any]]:
+    """
+    cot: 仍然不接 LLM，但输出一个更“步骤化”的 plan（模拟深度研究的结构）
+    注意：这里不输出任何“隐私推理过程”，只做可见的结构化步骤建议。
+    """
+
+    def _cot(data: Dict[str, Any]) -> Dict[str, Any]:
+        base = rule_based_reasoner(data)
+
+        docs_count = int(base.get("docs_count") or 0)
+        task_type = _safe_text(base.get("task_type"))
+
+        outline: List[str] = []
+        outline.append("restate the question and scope")
+        if docs_count == 0:
+            outline.append("identify missing context and request retrieval")
+        else:
+            outline.append("scan retrieved docs and extract candidate facts")
+            outline.append("group facts into themes and resolve conflicts")
+        if task_type == "qa":
+            outline.append("form a direct answer, then add supporting evidence")
+        elif task_type == "summary":
+            outline.append("write a concise summary and then a structured bullet list")
+        else:
+            outline.append("clarify intent or provide a best-effort answer")
+
+        # 保持 Contract 字段不变，只替换 outline，并标注 style
+        base["outline"] = outline
+        base["reasoner_style"] = "cot"
+        return base
+
+    return _cot
+
+
+def build_reasoner(name: str) -> Callable[[Dict[str, Any]], Dict[str, Any]]:
+    """
+    Builder: 统一入口，返回可注入 ReasoningNode 的 reasoner_fn(data)->plan
+    """
+    n = _safe_text(name).lower() or "simple"
+    if n == "simple":
+        return _build_simple_reasoner()
+    if n == "cot":
+        return _build_cot_reasoner()
+
+    raise ValueError(f"Unknown reasoner: {name}. Allowed: simple, cot")

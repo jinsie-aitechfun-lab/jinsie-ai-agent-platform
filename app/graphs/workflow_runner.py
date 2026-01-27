@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 from app.graphs.retrievers import keyword_retriever, vector_retriever
-from app.graphs.reasoners import rule_based_reasoner
+from app.graphs.reasoners import build_reasoner
 
 from app.graphs.workflow_nodes import InputNode, RetrievalNode, ReasoningNode, OutputNode
 
@@ -185,6 +185,7 @@ def run_minimal_workflow(
     *,
     trace: bool = False,
     retriever: str = "keyword",
+    reasoner: str = "simple",
     doc: Optional[str] = None,
     top_k: int = 3,
     chunk_size: int = 900,
@@ -209,8 +210,10 @@ def run_minimal_workflow(
     else:
         retrieval_fn = _build_keyword_retriever(top_k=top_k)
 
+    reasoner_fn = build_reasoner(reasoner)
+
     retrieval_node = RetrievalNode(name="retrieval", retriever=retrieval_fn)
-    reasoning_node = ReasoningNode(name="reasoning", reasoner=rule_based_reasoner)
+    reasoning_node = ReasoningNode(name="reasoning", reasoner=reasoner_fn)
     output_node = OutputNode(name="output")
 
     nodes = [input_node, retrieval_node, reasoning_node, output_node]
@@ -224,6 +227,7 @@ if __name__ == "__main__":
         "帮我总结一下今天我做了什么",
         trace=True,
         retriever="keyword",
+        reasoner="simple",
         top_k=2,
     )
 

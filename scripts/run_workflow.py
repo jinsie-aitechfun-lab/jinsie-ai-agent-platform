@@ -31,6 +31,12 @@ def main() -> int:
         help="Choose retrieval strategy: keyword (no embedding) or vector (embedding).",
     )
     parser.add_argument(
+        "--reasoner",
+        choices=["simple", "cot"],
+        default="simple",
+        help="Choose reasoning strategy: simple (rule-based) or cot (structured, step-like).",
+    )
+    parser.add_argument(
         "--doc",
         type=str,
         default="docs/samples/rag_seed.md",
@@ -75,6 +81,7 @@ def main() -> int:
         args.query,
         trace=args.trace,
         retriever=args.retriever,
+        reasoner=args.reasoner,
         doc=args.doc,
         top_k=args.top_k,
         chunk_size=args.chunk_size,
