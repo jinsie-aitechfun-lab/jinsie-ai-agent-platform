@@ -1,10 +1,10 @@
 """
-Minimal Workflow Runner ( Skeleton)
+RAG Subflow
 
 目标：
-- 把 InputNode -> RetrievalNode 串起来跑通
-- 不引入任何复杂框架
-- 只验证数据协议与结构
+- 把 Input -> Retrieval -> Reasoning -> Output 封装成可复用子流程
+- 不引入复杂框架
+- 保持协议稳定：沿用 workflow_nodes.py 的输入/输出字段约定
 """
 
 from typing import Any, Dict, Optional
@@ -16,9 +16,7 @@ from pathlib import Path
 
 from app.graphs.retrievers import keyword_retriever, vector_retriever
 from app.graphs.reasoners import build_reasoner
-
 from app.graphs.workflow_nodes import InputNode, RetrievalNode, ReasoningNode, OutputNode
-from app.graphs.subflows.rag_subflow import run_rag_subflow_data
 
 
 def _pretty(obj: Any) -> str:
@@ -181,15 +179,15 @@ def _build_vector_retriever(
     return _r
 
 
-def build_default_nodes(
+def _build_default_nodes(
     *,
     retrieval_fn,
     reasoner_fn,
 ):
     """
-    默认节点编排（可插拔）：
+    子流程默认编排（可插拔）：
     - 这里集中定义 nodes 的顺序
-    - 未来扩展多 Agent / 条件分支时，只改这里，不动 runner 主流程
+    - runner 只关心“调用 subflow”，不关心内部细节
     """
     input_node = InputNode(name="input")
     retrieval_node = RetrievalNode(name="retrieval", retriever=retrieval_fn)
@@ -198,8 +196,8 @@ def build_default_nodes(
     return [input_node, retrieval_node, reasoning_node, output_node]
 
 
-def run_minimal_workflow(
-    raw_input: str,
+def run_rag_subflow_data(
+    query: str,
     *,
     trace: bool = False,
     retriever: str = "keyword",
@@ -210,11 +208,49 @@ def run_minimal_workflow(
     chunk_overlap: int = 120,
 ) -> Dict[str, Any]:
     """
-    最小工作流：
-    raw_input -> InputNode -> RetrievalNode -> ReasoningNode -> OutputNode -> output dict
+    RAG 子流程（返回完整 data，供 runner 组合/编排）：
+    query -> InputNode -> RetrievalNode -> ReasoningNode -> OutputNode -> data dict
     """
-    return run_rag_subflow_data(
-        raw_input,
+    if retriever == "vector":
+        if not doc:
+            print("[error] --doc is required when --retriever=vector", file=sys.stderr)
+            raise SystemExit(2)
+        retrieval_fn = _build_vector_retriever(
+            doc_path=doc,
+            top_k=top_k,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+        )
+    else:
+        retrieval_fn = _build_keyword_retriever(top_k=top_k)
+
+    reasoner_fn = build_reasoner(reasoner)
+
+    nodes = _build_default_nodes(
+        retrieval_fn=retrieval_fn,
+        reasoner_fn=reasoner_fn,
+    )
+
+    data: Dict[str, Any] = {"raw_input": query}
+    return run_nodes(nodes, data, trace=trace)
+
+
+def run_rag_subflow(
+    query: str,
+    *,
+    trace: bool = False,
+    retriever: str = "keyword",
+    reasoner: str = "simple",
+    doc: Optional[str] = None,
+    top_k: int = 3,
+    chunk_size: int = 900,
+    chunk_overlap: int = 120,
+) -> str:
+    """
+    RAG 子流程（按“query -> answer”返回，满足工程调用习惯）
+    """
+    data = run_rag_subflow_data(
+        query,
         trace=trace,
         retriever=retriever,
         reasoner=reasoner,
@@ -223,16 +259,5 @@ def run_minimal_workflow(
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
     )
-
-
-if __name__ == "__main__":
-    result = run_minimal_workflow(
-        "帮我总结一下今天我做了什么",
-        trace=True,
-        retriever="keyword",
-        reasoner="simple",
-        top_k=2,
-    )
-
-    print("\n=== FINAL OUTPUT ===")
-    print(_pretty(result))
+    answer = data.get("answer", "")
+    return answer if isinstance(answer, str) else ""
