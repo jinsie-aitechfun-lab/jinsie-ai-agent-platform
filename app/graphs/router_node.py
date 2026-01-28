@@ -34,9 +34,24 @@ class RouterNode:
         self.default_runner = default_runner
         self.trace = trace
 
-    def _pick_route(self, query: str) -> str:
+    def _pick_route(self, data: Dict[str, Any], query: str) -> str:
+        """
+        路由优先级（工程化）：
+        1) plan.task_type 优先
+           - summary -> rag
+           - 其他 -> default
+        2) 再走关键词兜底（保持极简可控）
+        """
+        plan = data.get("plan")
+        if isinstance(plan, dict):
+            task_type = plan.get("task_type")
+            if isinstance(task_type, str) and task_type.strip():
+                if task_type.strip() == "summary":
+                    return "rag"
+                return "default"
+
         q = (query or "").strip()
-        if "总结" in q:
+        if "总结" in q or "概括" in q:
             return "rag"
         return "default"
 
@@ -51,7 +66,7 @@ class RouterNode:
         if not isinstance(raw_input, str):
             raw_input = str(raw_input)
 
-        route = self._pick_route(raw_input)
+        route = self._pick_route(data, raw_input)
 
         if self.trace:
             print(f"[router] route={route}")
