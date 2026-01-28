@@ -19,6 +19,7 @@ from app.graphs.reasoners import build_reasoner
 
 from app.graphs.workflow_nodes import InputNode, RetrievalNode, ReasoningNode, OutputNode
 from app.graphs.subflows.rag_subflow import run_rag_subflow_data
+from app.graphs.router_node import RouterNode
 
 
 def _pretty(obj: Any) -> str:
@@ -198,6 +199,48 @@ def build_default_nodes(
     return [input_node, retrieval_node, reasoning_node, output_node]
 
 
+def _run_default_flow_data(
+    raw_input: str,
+    *,
+    trace: bool = False,
+    retriever: str = "keyword",
+    reasoner: str = "simple",
+    doc: Optional[str] = None,
+    top_k: int = 3,
+    chunk_size: int = 900,
+    chunk_overlap: int = 120,
+) -> Dict[str, Any]:
+    """
+    Default flow（不走 subflow）：
+    raw_input -> InputNode -> RetrievalNode -> ReasoningNode -> OutputNode
+    注意：
+    - 这里优先保证“结构可跑通”
+    - reasoner_fn 默认先用 workflow_nodes 的 stub（最稳）
+    - retriever_fn 可选 keyword/vector（如果你环境已配置）
+    """
+    if retriever == "vector":
+        if not doc:
+            # 保守：vector 模式必须提供 doc，否则退回 keyword
+            retriever_fn = _build_keyword_retriever(top_k=top_k)
+        else:
+            retriever_fn = _build_vector_retriever(
+                doc_path=doc,
+                top_k=top_k,
+                chunk_size=chunk_size,
+                chunk_overlap=chunk_overlap,
+            )
+    else:
+        retriever_fn = _build_keyword_retriever(top_k=top_k)
+
+    # 先不强行接 build_reasoner，避免不确定签名导致炸；保留参数位以便后续升级
+    _ = reasoner
+    reasoner_fn = None
+
+    nodes = build_default_nodes(retrieval_fn=retriever_fn, reasoner_fn=reasoner_fn)
+    data = {"raw_input": raw_input}
+    return run_nodes(nodes, data, trace=trace)
+
+
 def run_minimal_workflow(
     raw_input: str,
     *,
@@ -210,18 +253,41 @@ def run_minimal_workflow(
     chunk_overlap: int = 120,
 ) -> Dict[str, Any]:
     """
-    最小工作流：
-    raw_input -> InputNode -> RetrievalNode -> ReasoningNode -> OutputNode -> output dict
+    最小工作流（带 Router）：
+    - query 包含“总结” => 走 rag_subflow
+    - 否则 => 走 default flow（nodes）
     """
-    return run_rag_subflow_data(
-        raw_input,
+    router_node = RouterNode(
+        name="router",
+        rag_runner=run_rag_subflow_data,
+        default_runner=_run_default_flow_data,
         trace=trace,
-        retriever=retriever,
-        reasoner=reasoner,
-        doc=doc,
-        top_k=top_k,
-        chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap,
+    )
+
+    rag_kwargs = {
+        "trace": trace,
+        "retriever": retriever,
+        "reasoner": reasoner,
+        "doc": doc,
+        "top_k": top_k,
+        "chunk_size": chunk_size,
+        "chunk_overlap": chunk_overlap,
+    }
+
+    default_kwargs = {
+        "trace": trace,
+        "retriever": retriever,
+        "reasoner": reasoner,
+        "doc": doc,
+        "top_k": top_k,
+        "chunk_size": chunk_size,
+        "chunk_overlap": chunk_overlap,
+    }
+
+    return router_node.run(
+        {"raw_input": raw_input},
+        rag_kwargs=rag_kwargs,
+        default_kwargs=default_kwargs,
     )
 
 
