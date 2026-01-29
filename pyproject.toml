@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jinsie-ai-agent-platform"
+version = "0.1.0"
+description = "Jinsie AI Agent Platform (importable base for system repos)"
+requires-python = ">=3.10"
+dependencies = []
+
+[tool.setuptools]
+packages = ["app", "scripts", "jinsie_agent_platform"]
