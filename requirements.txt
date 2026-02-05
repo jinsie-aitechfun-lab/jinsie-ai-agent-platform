@@ -5,5 +5,7 @@ langchain
 langchain-community
 pydantic
 httpx
+openai
 pymilvus
 python-dotenv
+
