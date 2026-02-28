@@ -9,6 +9,7 @@ load_dotenv(override=False)
 
 from fastapi import FastAPI
 from pydantic import BaseModel
+from time import perf_counter
 
 from app.graphs.workflow_runner import run_minimal_workflow
 
@@ -66,9 +67,7 @@ def _extract_answer(result: dict) -> str:
 
 @app.post("/v1/workflow/run", response_model=WorkflowRunResponse)
 def workflow_run(req: WorkflowRunRequest):
-    # We keep today’s contract minimal:
-    # - raw_input: user's input text
-    # - trace: whether to print node snapshots (for debug)
+    t0 = perf_counter()
     result = run_minimal_workflow(
         req.input,
         trace=req.trace,
@@ -76,5 +75,19 @@ def workflow_run(req: WorkflowRunRequest):
         reasoner="simple",
         top_k=2,
     )
+    total_ms = (perf_counter() - t0) * 1000.0
+
+    # pull timings from state/result if present
+    retrieval_ms = 0.0
+    llm_ms = 0.0
+    if isinstance(result, dict):
+        retrieval_ms = float(result.get("retrieval_ms", 0.0) or 0.0)
+        llm_ms = float(result.get("llm_ms", 0.0) or 0.0)
+        result["metrics"] = {
+            "total_ms": float(total_ms),
+            "retrieval_ms": float(retrieval_ms),
+            "llm_ms": float(llm_ms),
+        }
+
     answer = _extract_answer(result)
     return {"answer": answer, "result": result}

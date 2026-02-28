@@ -9,6 +9,7 @@ Workflow Node Skeletons
 """
 
 from typing import Any, Dict
+from time import perf_counter
 
 
 class BaseNode:
@@ -83,14 +84,22 @@ class RetrievalNode(BaseNode):
         """
         query = data.get("query", "")
 
+        t0 = perf_counter()
         # 变化点被隔离在 retriever：Node 只负责调用与保证输出结构
         docs = self.retriever(query)
+        retrieval_ms = (perf_counter() - t0) * 1000.0
+
+        # 写入 state（不污染 response contract；result dict 内可用）
+        try:
+            data["retrieval_ms"] = float(retrieval_ms)
+        except Exception:
+            data["retrieval_ms"] = 0.0
 
         return {
             "query": query,
             "docs": docs,
+            "retrieval_ms": data.get("retrieval_ms", 0.0),
         }
-
 
 class ToolNode(BaseNode):
     """Workflow 的工具节点：调用工具或函数"""
@@ -128,9 +137,17 @@ class ReasoningNode(BaseNode):
         }
 
     def run(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        plan = self.reasoner(data)
-        data["plan"] = plan
-        return data
+        t0 = perf_counter()
+        try:
+            plan = self.reasoner(data)
+            data["plan"] = plan
+            return data
+        finally:
+            llm_ms = (perf_counter() - t0) * 1000.0
+            try:
+                data["llm_ms"] = float(llm_ms)
+            except Exception:
+                data["llm_ms"] = 0.0
 
 
 class MemoryNode(BaseNode):
